@@ -1,0 +1,7 @@
+[project]
+name = "monitoramento-hospitalar-multimodal"
+version = "0.1.0"
+description = "Sistema de monitoramento multimodal de pacientes (video, audio e sinais vitais) com deteccao de anomalias em tempo real, executado 100% localmente."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
