@@ -242,12 +242,16 @@ injetadas, validando a eficácia da estratégia combinada.
 │   │   ├── prompts.py
 │   │   ├── text_analyzer.py
 │   │   └── summarizer.py
+│   ├── alerts/
+│   │   ├── alert_rules.py
+│   │   ├── fusion_engine.py
+│   │   ├── alert_dispatcher.py
+│   │   ├── plotter.py
+│   │   └── run_pipeline.py
 │   ├── vitals/
 │   │   ├── generator.py
 │   │   ├── detector.py
 │   │   └── plotter.py
-│   ├── alerts/
-│   └── llm/
 ├── tests/
 ├── .env.example
 ├── .gitignore
@@ -338,6 +342,7 @@ captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
 Cloud, Seção 12 — a confirmar).
 
 Saídas geradas:
+
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
 - `data/raw/synthetic_pose_frames.npy` — array NumPy dos frames brutos,
   usado como *backup* para reprocessamento sem decodificar o `.mp4`.
@@ -389,8 +394,9 @@ quando o ângulo absoluto não excede um limiar fixo.
 
 **3. Regras clínicas.** Duas regras de limiar fixo, calibradas
 empiricamente para o dataset sintético:
-   - Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
-   - Colapso de tronco: z-score do deslocamento horizontal conjunto dos
+
+- Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
+- Colapso de tronco: z-score do deslocamento horizontal conjunto dos
      dois ombros `> 2.0` (captura quando ambos os ombros migram para o
      mesmo lado, característico de inclinação de tronco).
 
@@ -589,10 +595,11 @@ como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
 anormalmente lenta quanto anormalmente rápida.
 
 **2. Regras clínicas.** Duas regras complementares:
-   - Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+
+- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
      1.0` — a combinação de ambos os critérios distingue hesitação
      patológica de uma pausa natural entre frases;
-   - Fala acelerada: `words_per_second` acima de um limiar adaptativo
+- Fala acelerada: `words_per_second` acima de um limiar adaptativo
      (média + 1 desvio padrão do conjunto).
 
 **Resultados obtidos (execução real, sem dados simulados):**
@@ -745,12 +752,13 @@ strings espalhadas pelo código.
 
 **Prompt de análise de texto.** Solicita ao modelo `gpt-oss-20b` que
 responda exclusivamente em JSON estrito, extraindo:
-   - `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
-   - `sentimento`: positivo, neutro ou negativo;
-   - `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
+
+- `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
+- `sentimento`: positivo, neutro ou negativo;
+- `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
      prompt distinguindo sintomas potencialmente graves (dor no peito,
      falta de ar, fraqueza súbita) de queixas moderadas ou neutras;
-   - `justificativa`: explicação breve, útil para auditoria humana da
+- `justificativa`: explicação breve, útil para auditoria humana da
      decisão do modelo.
 
 Como modelos de linguagem ocasionalmente envolvem o JSON em texto
@@ -850,13 +858,168 @@ seção de considerações éticas do relatório final (Etapa 7).
 
 ---
 
-## 10. Próximas Etapas
+## 10. Etapa 5 — Motor de Fusão Multimodal e Alertas
+
+### 10.1 Contexto e papel desta etapa
+
+O desafio exige explicitamente "gerar alertas automáticos para a equipe
+médica com base nas anomalias detectadas" e "realizar a análise e fusão
+de diferentes tipos de dados médicos" (texto, áudio, vídeo). Até a
+Etapa 4, cada modalidade era detectada e interpretada de forma isolada.
+A Etapa 5 introduz o componente que faltava: um **motor de decisão** que
+cruza os resultados das três modalidades e da camada de LLM em um único
+nível de alerta, e os "despacha" para a equipe médica.
+
+Este módulo não realiza nenhuma detecção estatística nova — ele consome
+os resultados já produzidos pelos detectores das Etapas 1-3 e pela
+análise de linguagem da Etapa 4, respondendo à pergunta: *dado tudo que
+sabemos sobre este paciente neste momento, qual o nível de atenção
+necessário da equipe médica?*
+
+### 10.2 Modelo de alerta (`src/alerts/alert_rules.py`)
+
+Foram adotados **3 níveis de alerta** — Normal, Atenção e Crítico —
+alinhados a escalas de triagem clínica real (como a escala de Manchester
+usada em prontos-socorros), e escolhidos por corresponderem diretamente
+aos 3 níveis de urgência que a Etapa 4 já produz (baixo/médio/alto),
+evitando uma tradução artificial entre escalas de granularidade
+diferente.
+
+**Regra de decisão:**
+
+| Critério                                                          | Nível resultante |
+|------------------------------------------------------------------------|----------------------|
+| Nenhuma modalidade com anomalia E urgência LLM "baixo"                  | Normal               |
+| Exatamente 1 modalidade com anomalia OU urgência LLM "medio"            | Atenção              |
+| 2+ modalidades com anomalia simultânea OU urgência LLM "alto"           | Crítico              |
+
+O nível final é o **maior** entre o critério por contagem de modalidades
+e o critério por urgência do LLM — qualquer sinal de gravidade (estatístico
+ou linguístico) é suficiente para elevar o alerta, nunca para reduzi-lo.
+Esse princípio de segurança ("na dúvida, alerta mais, não menos") foi
+testado explicitamente: um cenário em que nenhum detector estatístico
+dispara, mas o paciente verbaliza um sintoma grave (urgência "alto"
+isolada), ainda assim resulta em alerta Crítico — validando que a camada
+de linguagem natural pode capturar risco que os detectores numéricos
+ainda não tornaram visível.
+
+### 10.3 Motor de fusão (`src/alerts/fusion_engine.py`)
+
+Orquestra os pipelines das Etapas 1-4, resume o status de cada modalidade
+(`ModalityStatus`) e aplica `alert_rules.decide_alert_level()`. A geração
+do resumo clínico executivo (chamada à Groq API, mais custosa) é mantida
+como etapa opcional e separada dentro do pipeline, evitando o custo dessa
+chamada em execuções que só precisam do nível de alerta.
+
+### 10.4 Despacho e histórico (`src/alerts/alert_dispatcher.py`)
+
+Como o desafio não exige um canal de notificação real (e-mail/SMS) e o
+projeto roda localmente, o "envio" do alerta é implementado como:
+
+1. **Log estruturado**, com nível de severidade do próprio logger
+   (INFO/WARNING/ERROR) espelhando o nível clínico — facilita filtrar por
+   gravidade em ferramentas de observabilidade;
+2. **Histórico persistente em JSON** (`data/processed/alert_history.json`),
+   permitindo que a interface Streamlit (Etapa 6) exiba a linha do tempo
+   de alertas sem reprocessar os dados brutos.
+
+A separação entre *decidir* o alerta (`alert_rules.py` + `fusion_engine.py`)
+e *despachar* o alerta (`alert_dispatcher.py`) segue o princípio de
+responsabilidade única: substituir o canal de notificação no futuro
+(e-mail real, webhook, SMS) exigiria alterar apenas este último módulo.
+
+### 10.5 Nota técnica — truncamento de respostas longas do LLM (gpt-oss-120b)
+
+A Etapa 4 (Seção 9.3) já havia identificado que os modelos `gpt-oss`
+consomem parte do orçamento de tokens em raciocínio interno antes da
+resposta visível, podendo retornar conteúdo vazio com `max_tokens`
+insuficiente. Durante a integração da Etapa 5 — primeira vez em que o
+`summarizer.py` foi exercitado com os dados completos e reais de todas
+as modalidades simultaneamente — observou-se uma variante desse mesmo
+problema: a resposta **não veio vazia**, mas foi **cortada no meio de
+uma frase** ("...exame neurológico focado em força e sensibilidade
+dos"), com `max_tokens=700`.
+
+Isso indica que o modelo `gpt-oss-120b` consome uma fração de tokens em
+reasoning proporcionalmente maior que o `gpt-oss-20b` (Etapa 4) ao lidar
+com um prompt mais complexo (três fontes de evidência simultâneas). A
+correção aplicada:
+
+1. `max_tokens` elevado de 700 para 1200, com nova tentativa automática
+   em 1600 caso a resposta volte vazia (mesma estratégia da Etapa 4);
+2. Uma verificação adicional: se a resposta não terminar em pontuação
+   final (`.`, `!`, `?`, aspas), um aviso é emitido — permite detectar
+   truncamento residual rapidamente em execuções futuras, sem impedir o
+   uso do texto parcial obtido.
+
+Após a correção, o resumo executivo de 149 palavras foi gerado por completo,
+terminando em frase concluída ("...considerar suporte ventilatório e
+investigação de causa (por exemplo, imagem torácica)."). Este episódio
+reforça uma lição de engenharia válida para todo o projeto: o
+comportamento de modelos de raciocínio sob restrição de tokens não é
+uniforme entre tamanhos de modelo, e deve ser validado empiricamente com
+dados de produção — não apenas com casos de teste simplificados.
+
+### 10.6 Dashboard consolidado (`src/alerts/plotter.py`)
+
+Gera a "tela única" que a equipe médica veria: um banner colorido com o
+nível de alerta (verde/laranja/vermelho), três cartões de status — um
+por modalidade, com ícone de alerta/confirmação e detalhe textual — e um
+painel inferior com a justificativa da decisão e o resumo clínico
+completo do LLM.
+
+**Nota técnica — quebra de linha e dimensionamento dinâmico.** A primeira
+versão do dashboard usava posicionamento de texto fixo do `matplotlib`,
+que não quebra linha automaticamente para texto posicionado por
+coordenadas de eixo. Com dados de teste curtos isso não era perceptível,
+mas com os textos reais do projeto — em especial o resumo clínico de
+~150 palavras gerado pelo LLM — o texto extrapolava as bordas dos
+elementos visuais, tornando-se ilegível. A correção implementada:
+
+- Quebra de linha manual via `textwrap.fill()`, calibrada para a largura
+  de cada elemento (cartões vs. painel de texto);
+- Altura da figura e do painel de texto calculadas dinamicamente a
+  partir do número de linhas resultante da quebra, eliminando tanto o
+  corte de conteúdo quanto o espaço vazio excessivo observado em
+  iterações intermediárias da correção.
+
+### 10.7 Resultado da execução completa (dados reais, sem simulação)
+
+A execução de ponta a ponta (`src/alerts/run_pipeline.py`), conectando
+as Etapas 1 a 5 com os dados sintéticos já validados nas seções
+anteriores, produziu o seguinte resultado:
+
+- **Vitais**: 9 amostras com anomalia (consistente com a Etapa 1 — Seção 5.2);
+- **Postura**: 34 frames com anomalia postural (consistente com a Etapa 2 — Seção 7.5);
+- **Fala**: 6 segmentos com anomalia de velocidade/pausa (consistente com a Etapa 3 — Seção 8.5);
+- **Urgência LLM**: "alto" (duas frases de urgência alta na análise de texto da Etapa 4);
+- **Nível de alerta final: CRÍTICO** — por dois critérios simultaneamente
+  (3 de 3 modalidades com anomalia, E urgência LLM "alto").
+
+![Dashboard de fusão multimodal](imagens/fusion_dashboard.png)
+
+**Discussão.** O resultado demonstra a integração completa e coerente
+das cinco etapas do projeto: cada modalidade contribui seu próprio
+veredito estatístico, a camada de LLM acrescenta uma interpretação
+semântica do relato verbal do paciente, e o motor de fusão consolida
+tudo em uma decisão única, auditável (com justificativa textual
+explícita) e visualmente comunicável à equipe médica. O cenário
+sintético utilizado neste projeto foi deliberadamente desenhado com
+anomalias em todas as modalidades (Seções 5.1, 7.3, 9.3), portanto um
+nível Crítico é o resultado esperado e correto para esta demonstração —
+o sistema também foi validado (Seção 10.2) para os cenários intermediários
+de Normal e Atenção, usando dados de teste controlados em
+`alert_rules.py`.
+
+---
+
+## 11. Próximas Etapas
 
 - ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
 - ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
 - ~~Etapa 4: Integração com Groq API para extração de termos críticos,
   sentimento e sumarização~~ ✅ **Concluída**
-- Etapa 5: Motor de fusão multimodal e geração de alertas;
+- ~~Etapa 5: Motor de fusão multimodal e geração de alertas~~ ✅ **Concluída**
 - Etapa 6: Interface Streamlit;
 - Etapa 7: Consolidação final do relatório técnico;
 - Etapa 8: Deploy no Streamlit Cloud.
