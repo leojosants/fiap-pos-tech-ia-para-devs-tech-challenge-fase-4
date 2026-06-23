@@ -1,0 +1,38 @@
+# requirements.txt
+# ==================
+# Dependências Python para deploy no Streamlit Community Cloud.
+#
+# O Streamlit Community Cloud não usa uv/pyproject.toml diretamente — ele
+# procura um requirements.txt na raiz do repositório (ou no diretório do
+# arquivo de entrada) e instala via pip (com tentativa de uso de uv
+# internamente, quando disponível, conforme documentação oficial).
+#
+# Este arquivo replica as dependências já validadas em pyproject.toml
+# (ver Etapas 1-6 do relatório técnico) — gerado manualmente em vez de
+# exportado automaticamente para manter controle explícito de versões
+# compatíveis com o ambiente Linux/Debian do Community Cloud (ver nota
+# sobre packages.txt para dependências de sistema).
+
+# --- Núcleo de dados e visualização (Etapa 1) ---
+numpy>=2.4.6
+pandas>=3.0.3
+matplotlib>=3.11.0
+scikit-learn>=1.9.0
+
+# --- Vídeo / análise postural (Etapa 2) ---
+opencv-python>=4.13.0.92
+
+# --- Áudio / transcrição (Etapa 3) ---
+# pyttsx3 NÃO é incluído: depende de SAPI5 (Windows), indisponível no
+# servidor Linux do Community Cloud. Os arquivos .wav já sintetizados
+# localmente são commitados no repositório (ver Seção 8.3 do relatório
+# técnico e a nota de deploy correspondente).
+openai-whisper>=20250625
+imageio-ffmpeg>=0.6.0
+
+# --- Integração com LLM via Groq API (Etapa 4) ---
+groq>=1.5.0
+python-dotenv>=1.2.2
+
+# --- Interface (Etapa 6) ---
+streamlit>=1.58.0

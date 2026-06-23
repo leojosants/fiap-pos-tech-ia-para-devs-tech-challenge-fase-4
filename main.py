@@ -75,11 +75,28 @@ def run_monitoring_pipeline(generate_clinical_summary: bool = True) -> None:
     posture_text = build_posture_summary_text(df_posture, posture_metrics)
 
     progress.progress(50, text="Transcrevendo e analisando áudio (Whisper)...")
+    # Os arquivos de áudio sintético (data/raw/audio_segments/*.wav) são
+    # gerados localmente via pyttsx3 (motor de TTS do sistema operacional,
+    # SAPI5 no Windows) e COMMITADOS no repositório — não regenerados em
+    # tempo de execução no servidor de deploy (Streamlit Community Cloud,
+    # Linux/Debian), onde o SAPI5 não está disponível. Esta verificação
+    # só dispara a geração via TTS quando os arquivos realmente não
+    # existem (ex.: primeira execução em ambiente de desenvolvimento local
+    # ainda sem os áudios gerados) — ver Seção de Deploy do relatório
+    # técnico para detalhes desta decisão.
     if not AUDIO_METADATA_PATH.exists():
-        from src.audio.synthetic_audio import generate_synthetic_audio_dataset
-        generate_synthetic_audio_dataset(
-            Path("data/raw/audio_segments"), AUDIO_METADATA_PATH
-        )
+        try:
+            from src.audio.synthetic_audio import generate_synthetic_audio_dataset
+            generate_synthetic_audio_dataset(
+                Path("data/raw/audio_segments"), AUDIO_METADATA_PATH
+            )
+        except Exception as e:
+            st.error(
+                "Não foi possível gerar o áudio sintético neste ambiente "
+                f"(motor de TTS indisponível: {e}). Os arquivos de áudio "
+                "deveriam estar pré-gerados e commitados no repositório."
+            )
+            st.stop()
     df_speech = process_audio_dataset(AUDIO_METADATA_PATH)
     df_speech, speech_metrics = run_audio_detection_pipeline(df_speech)
 

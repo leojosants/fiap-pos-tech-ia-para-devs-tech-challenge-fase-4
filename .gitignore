@@ -28,6 +28,16 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# Excecao: arquivos de audio sintetico da Etapa 3, commitados deliberadamente.
+# O motor de TTS (pyttsx3/SAPI5) usado para gera-los so funciona no Windows
+# local de desenvolvimento, indisponivel no servidor Linux do Streamlit
+# Community Cloud (Etapa 8). Sem esses arquivos versionados, a aba de Audio
+# da aplicacao implantada nao teria dados para processar. Ver nota de deploy
+# no relatorio tecnico para detalhes completos desta decisao.
+!data/raw/audio_metadata.json
+!data/raw/audio_segments/
+!data/raw/audio_segments/*.wav
+
 # Modelos baixados automaticamente (Whisper, MediaPipe, DeepFace)
 models/
 *.pt

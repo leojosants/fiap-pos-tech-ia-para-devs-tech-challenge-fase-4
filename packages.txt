@@ -1,0 +1,14 @@
+# packages.txt
+# =============
+# Dependências de sistema (Linux/Debian, instaladas via apt-get pelo
+# Streamlit Community Cloud) — uma por linha, sem versão.
+#
+# ffmpeg: o pacote Python imageio-ffmpeg (em requirements.txt) já embute
+# um binário ffmpeg multiplataforma, e o módulo src/audio/audio_processor.py
+# o localiza e expõe no PATH automaticamente (ver Seção 9.2 do relatório
+# técnico — nota sobre a dependência do ffmpeg no pipeline do Whisper).
+# Esta entrada é mantida como rede de segurança: caso o ambiente do
+# Community Cloud não execute corretamente o binário embutido por algum
+# motivo de permissão ou arquitetura, o ffmpeg do sistema operacional
+# cobre a mesma necessidade.
+ffmpeg
