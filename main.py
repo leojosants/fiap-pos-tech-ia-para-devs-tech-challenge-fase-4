@@ -16,6 +16,7 @@ Os resultados de cada execução são mantidos em st.session_state,
 permitindo navegar entre as abas sem reprocessar os dados.
 """
 
+import os
 from pathlib import Path
 
 import streamlit as st
