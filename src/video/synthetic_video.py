@@ -203,6 +203,58 @@ def _render_frame(
     return frame
 
 
+# Codecs candidatos, em ordem de preferência, para escrita de vídeo
+# compatível com reprodução direta em navegador (via st.video do Streamlit).
+# "avc1" é a tag FFmpeg para H.264 — codec universalmente suportado por
+# navegadores modernos. "mp4v" (MPEG-4 Part 2) grava com sucesso na maioria
+# dos builds do OpenCV, mas NÃO é reproduzido nativamente por navegadores
+# como Chrome/Edge/Firefox — o arquivo abre, mas a tela permanece preta,
+# sintoma observado e corrigido durante o desenvolvimento deste projeto
+# (ver relatório técnico).
+_VIDEO_CODEC_CANDIDATES = ["avc1", "mp4v"]
+
+
+def _write_video_with_browser_compatible_codec(
+    frames: list[np.ndarray],
+    output_path: Path,
+) -> str:
+    """
+    Tenta gravar o vídeo com o primeiro codec da lista de candidatos que
+    o OpenCV conseguir abrir com sucesso neste ambiente, priorizando
+    H.264 (avc1) por compatibilidade com navegadores.
+
+    Retorna o nome do codec efetivamente utilizado, para fins de log e
+    diagnóstico — útil porque a disponibilidade de codecs varia entre
+    sistemas operacionais e instalações do OpenCV (Windows, Linux, macOS
+    têm builds com codecs distintos vinculados via FFmpeg).
+    """
+    for codec_name in _VIDEO_CODEC_CANDIDATES:
+        fourcc = cv2.VideoWriter_fourcc(*codec_name)
+        writer = cv2.VideoWriter(str(output_path), fourcc, FPS, (WIDTH, HEIGHT))
+
+        if not writer.isOpened():
+            writer.release()
+            continue
+
+        for f in frames:
+            writer.write(f)
+        writer.release()
+
+        if codec_name != _VIDEO_CODEC_CANDIDATES[0]:
+            print(
+                f"[AVISO] Codec preferencial (H.264/avc1) não disponível "
+                f"neste ambiente. Usando fallback '{codec_name}' — "
+                f"pode não reproduzir em todos os navegadores."
+            )
+        return codec_name
+
+    raise RuntimeError(
+        "Nenhum codec de vídeo disponível neste ambiente OpenCV "
+        f"(tentados: {_VIDEO_CODEC_CANDIDATES}). Verifique a instalação "
+        "do opencv-python."
+    )
+
+
 def generate_synthetic_video(
     output_video_path: Path | None = None,
     output_frames_path: Path | None = None,
@@ -233,13 +285,7 @@ def generate_synthetic_video(
     # ── Salva como .mp4 ───────────────────────────────────────────────────────
     if output_video_path is not None:
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(
-            str(output_video_path), fourcc, FPS, (WIDTH, HEIGHT)
-        )
-        for f in frames:
-            writer.write(f)
-        writer.release()
+        _write_video_with_browser_compatible_codec(frames, output_video_path)
         print(f"Vídeo salvo em: {output_video_path}")
 
     # ── Salva frames como numpy array (útil para testes sem cv2 writer) ──────

@@ -252,11 +252,16 @@ injetadas, validando a eficácia da estratégia combinada.
 │   │   ├── generator.py
 │   │   ├── detector.py
 │   │   └── plotter.py
+│   └── dashboard/
+│       ├── pages_vitals.py
+│       ├── pages_video.py
+│       ├── pages_audio.py
+│       └── pages_alerts.py
 ├── tests/
 ├── .env.example
 ├── .gitignore
 ├── .python-version
-├── main.py
+├── main.py                # ponto de entrada Streamlit (Etapa 6)
 ├── pyproject.toml
 └── README.md
 ```
@@ -1013,14 +1018,144 @@ de Normal e Atenção, usando dados de teste controlados em
 
 ---
 
-## 11. Próximas Etapas
+## 11. Etapa 6 — Interface Streamlit
+
+### 11.1 Contexto e papel desta etapa
+
+Até a Etapa 5, o sistema era uma coleção de scripts executados
+individualmente via linha de comando (`uv run python -m src.<modulo>`).
+A Etapa 6 transforma o projeto em uma **aplicação interativa única**,
+substituindo o `main.py` (placeholder vazio desde a Etapa 0) pelo ponto
+de entrada real do sistema, e cumprindo o papel central da estratégia de
+entrega deste projeto (Seção 1): como não há vídeo de demonstração
+gravado, a aplicação Streamlit é o artefato que permite à banca **operar
+o sistema diretamente**, sem rodar nenhum comando de terminal.
+
+### 11.2 Arquitetura da interface
+
+A interface segue um fluxo de duas fases, decidido deliberadamente para
+priorizar clareza de uso por um avaliador sem contexto prévio do projeto:
+
+1. **Tela inicial** com visão geral do sistema e um único botão
+   "▶️ Executar Monitoramento Completo" — em vez de botões fragmentados
+   por modalidade, que exigiriam do usuário entender a ordem de
+   dependência entre etapas (o motor de fusão da Etapa 5 precisa das
+   três modalidades processadas).
+2. **Barra de progresso com texto dinâmico** durante a execução
+   ("Processando sinais vitais...", "Transcrevendo áudio (Whisper)...",
+   "Analisando texto via Groq LLM...") — o pipeline completo invoca
+   Whisper localmente e duas chamadas à Groq API, podendo levar de 30 a
+   60 segundos; o feedback textual evita a percepção de que a aplicação
+   "travou".
+
+Ao final da execução, os resultados são armazenados em
+`st.session_state` e distribuídos em 4 abas:
+
+| Aba       | Arquivo                              | Conteúdo                                                    |
+|--------------|------------------------------------------|------------------------------------------------------------------|
+| 🚨 Alertas    | `src/dashboard/pages_alerts.py`          | Nível de alerta, status por modalidade, resumo clínico, histórico |
+| 📊 Vitais     | `src/dashboard/pages_vitals.py`          | Métricas, gráfico de linha dos 4 sinais, tabela de anomalias      |
+| 🎥 Vídeo      | `src/dashboard/pages_video.py`           | Player do vídeo sintético, gráfico de ângulos articulares         |
+| 🎙️ Áudio      | `src/dashboard/pages_audio.py`           | Player de áudio por frase, transcrição, classificação de urgência |
+
+O `main.py` atua como orquestrador: importa e invoca os pipelines das
+Etapas 1-5 (sem duplicar nenhuma lógica de detecção ou fusão) e delega a
+renderização visual a cada módulo de página — separação de
+responsabilidades que mantém a lógica de negócio testável
+independentemente da camada de interface.
+
+### 11.3 Nota técnica — coluna `file_path` não propagada pelo pipeline de áudio
+
+Ao integrar a aba de Áudio, identificou-se que o pipeline de
+processamento da Etapa 3 (`audio_processor.process_audio_dataset`) não
+propaga a coluna `file_path` para o DataFrame de saída — ela existe
+apenas no arquivo de metadados JSON original. A tentativa inicial de
+acessar `row.get("file_path", "")` resultava em uma string vazia, que o
+Python resolve silenciosamente para `Path(".")` (diretório atual); o
+Streamlit, ao tentar abrir esse "arquivo de áudio", lançava
+`PermissionError` ao tentar ler um diretório como se fosse um arquivo.
+
+A correção reconecta a coluna a partir do JSON de metadados, no próprio
+`main.py`, após o processamento — sem alterar a interface do
+`audio_processor.py`, mantendo a Etapa 3 desacoplada de detalhes
+específicos da camada de visualização. Adicionalmente, `pages_audio.py`
+passou a verificar explicitamente a existência e o tipo do caminho antes
+de invocar `st.audio()`, prevenindo falhas semelhantes em cenários
+futuros (por exemplo, datasets de áudio gerados via fallback de tons
+sintéticos, sem caminho de arquivo real).
+
+### 11.4 Nota técnica — compatibilidade de codec de vídeo com navegadores
+
+O vídeo sintético gerado na Etapa 2 (`synthetic_video.py`) originalmente
+usava o codec `mp4v` (MPEG-4 Part 2) para gravação via OpenCV. Embora
+esse codec grave um arquivo `.mp4` válido — reproduzível por players
+como VLC e pelo próprio OpenCV ao reler o arquivo — **a maioria dos
+navegadores modernos não o decodifica nativamente**, esperando H.264
+dentro do container MP4. O sintoma observado foi o player de vídeo do
+Streamlit (`st.video`) carregar normalmente, mas a reprodução permanecer
+com tela preta, sem erro reportado no terminal — uma falha silenciosa
+particularmente difícil de diagnosticar sem inspecionar o codec do
+arquivo gerado.
+
+A correção implementa uma cadeia de fallback de codecs
+(`_write_video_with_browser_compatible_codec()`): o sistema tenta
+primeiro `avc1` (tag FFmpeg para H.264, preferencial por compatibilidade
+universal com navegadores) e, caso o `VideoWriter` não consiga abrir
+esse codec neste ambiente, recua automaticamente para `mp4v`, emitindo
+um aviso no log.
+
+Na prática, o comportamento variou entre os dois ambientes usados no
+desenvolvimento deste projeto:
+
+- No ambiente de testes (Linux, sandbox de desenvolvimento), o codec
+  `avc1` falhou ao abrir (ausência de encoder H.264 vinculado ao FFmpeg
+  do OpenCV), e o sistema recuou corretamente para `mp4v` — comportamento
+  validado e esperado.
+- No ambiente de execução real (Windows), o FFmpeg também não localizou
+  a biblioteca `openh264-1.8.0-win64.dll` necessária para H.264 (mensagem
+  de log `Failed to load OpenH264 library`, originada do próprio
+  FFmpeg/OpenCV, fora do controle direto da aplicação), recuando da
+  mesma forma para `mp4v` — que, neste ambiente Windows específico,
+  reproduziu corretamente no navegador via o decodificador nativo do
+  Windows Media Foundation.
+
+Esse episódio ilustra uma característica relevante de aplicações que
+dependem de codecs multimídia: o comportamento não é determinístico
+entre sistemas operacionais e instalações do OpenCV, tornando uma
+estratégia de fallback explícita (em vez de assumir um único codec como
+universalmente disponível) uma prática de engenharia mais robusta do
+que uma escolha fixa — especialmente relevante para o ambiente de
+deploy final (Streamlit Cloud, Etapa 8), cujo conjunto de codecs
+disponíveis ainda será validado.
+
+### 11.5 Resultado da validação
+
+A aplicação foi validada em duas frentes complementares:
+
+- **Testes automatizados** (sem interface gráfica real): verificação de
+  sintaxe de todos os módulos, inicialização do servidor Streamlit em
+  modo headless (`HTTP 200` na rota raiz), execução completa do pipeline
+  com mocks de Whisper e Groq API, e chamada direta de cada função
+  `render_*_tab()` com DataFrames reais produzidos pelos pipelines das
+  Etapas 1-5 — capturando, por exemplo, o problema de `file_path`
+  ausente (Seção 11.3) antes mesmo da primeira execução manual.
+- **Execução manual de ponta a ponta**, no ambiente Windows de destino:
+  um único clique no botão de execução completou as cinco etapas com
+  sucesso, populando as quatro abas corretamente — incluindo reprodução
+  de vídeo e dos doze segmentos de áudio — e exibindo o alerta
+  consolidado de nível **Crítico**, consistente com os resultados já
+  documentados nas Seções 5, 7, 8 e 10.
+
+---
+
+## 12. Próximas Etapas
 
 - ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
 - ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
 - ~~Etapa 4: Integração com Groq API para extração de termos críticos,
   sentimento e sumarização~~ ✅ **Concluída**
 - ~~Etapa 5: Motor de fusão multimodal e geração de alertas~~ ✅ **Concluída**
-- Etapa 6: Interface Streamlit;
+- ~~Etapa 6: Interface Streamlit~~ ✅ **Concluída**
 - Etapa 7: Consolidação final do relatório técnico;
 - Etapa 8: Deploy no Streamlit Cloud.
 
