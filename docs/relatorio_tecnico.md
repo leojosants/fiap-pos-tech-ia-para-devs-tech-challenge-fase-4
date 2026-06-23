@@ -203,7 +203,7 @@ O painel completo é salvo em `data/processed/vitals_panel.png` e
 demonstra visualmente a coincidência entre as anomalias detectadas e as
 injetadas, validando a eficácia da estratégia combinada.
 
-![Painel de sinais vitais](../data/processed/vitals_panel.png)
+![Painel de sinais vitais](imagens/vitals_panel.png)
 
 ---
 
@@ -332,7 +332,6 @@ captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
 Cloud, Seção 12 — a confirmar).
 
 Saídas geradas:
-
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
 - `data/raw/synthetic_pose_frames.npy` — array NumPy dos frames brutos,
   usado como *backup* para reprocessamento sem decodificar o `.mp4`.
@@ -384,9 +383,8 @@ quando o ângulo absoluto não excede um limiar fixo.
 
 **3. Regras clínicas.** Duas regras de limiar fixo, calibradas
 empiricamente para o dataset sintético:
-
-- Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
-- Colapso de tronco: z-score do deslocamento horizontal conjunto dos
+   - Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
+   - Colapso de tronco: z-score do deslocamento horizontal conjunto dos
      dois ombros `> 2.0` (captura quando ambos os ombros migram para o
      mesmo lado, característico de inclinação de tronco).
 
@@ -450,7 +448,7 @@ gravadas diretamente em disco, característica essencial para execução em
 ambiente headless (servidor sem interface gráfica) e para o deploy final
 no Streamlit Cloud.
 
-![Painel de ângulos articulares](../data/processed/pose_angles_panel.png)
+![Painel de ângulos articulares](imagens/pose_angles_panel.png)
 
 ### 7.7 Limitações conhecidas e trabalhos futuros
 
@@ -585,11 +583,10 @@ como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
 anormalmente lenta quanto anormalmente rápida.
 
 **2. Regras clínicas.** Duas regras complementares:
-
-- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+   - Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
      1.0` — a combinação de ambos os critérios distingue hesitação
      patológica de uma pausa natural entre frases;
-- Fala acelerada: `words_per_second` acima de um limiar adaptativo
+   - Fala acelerada: `words_per_second` acima de um limiar adaptativo
      (média + 1 desvio padrão do conjunto).
 
 **Resultados obtidos (execução real, sem dados simulados):**
@@ -637,7 +634,7 @@ Ambas as saídas são gravadas em disco sem qualquer dependência de
 reprodução de áudio ou display gráfico, mantendo a compatibilidade com
 execução headless exigida pelo deploy no Streamlit Cloud.
 
-![Painel de métricas de fala](../data/processed/audio_metrics_panel.png)
+![Painel de métricas de fala](imagens/audio_metrics_panel.png)
 
 ### 9.7 Síntese comparativa dos três módulos de detecção
 
