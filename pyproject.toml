@@ -5,12 +5,15 @@ description = "Sistema de monitoramento multimodal de pacientes (video, audio e 
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "imageio-ffmpeg>=0.6.0",
     "matplotlib>=3.11.0",
     "mediapipe>=0.10.35",
     "numpy>=2.4.6",
+    "openai-whisper>=20250625",
     "opencv-python>=4.13.0.92",
     "pandas>=3.0.3",
     "python-dotenv>=1.2.2",
+    "pyttsx3>=2.99",
     "scikit-learn>=1.9.0",
     "streamlit>=1.58.0",
     "tqdm>=4.68.3",

@@ -212,12 +212,16 @@ injetadas, validando a eficácia da estratégia combinada.
 ```
 ├── data/
 │   ├── raw/
-│   │   └── synthetic_pose_frames.npy
+│   │   ├── synthetic_pose_frames.npy
+│   │   ├── audio_segments/
+│   │   └── audio_metadata.json
 │   └── processed/
 │       ├── vitals_panel.png
 │       ├── synthetic_pose.mp4
 │       ├── pose_angles_panel.png
-│       └── pose_frames/
+│       ├── pose_frames/
+│       ├── audio_metrics_panel.png
+│       └── audio_waveforms/
 ├── docs/
 │   └── relatorio_tecnico.md
 ├── notebook/
@@ -228,6 +232,10 @@ injetadas, validando a eficácia da estratégia combinada.
 │   │   ├── anomaly_detector.py
 │   │   └── plotter.py
 │   ├── audio/
+│   │   ├── synthetic_audio.py
+│   │   ├── audio_processor.py
+│   │   ├── anomaly_detector.py
+│   │   └── plotter.py
 │   ├── vitals/
 │   │   ├── generator.py
 │   │   ├── detector.py
@@ -462,10 +470,199 @@ no Streamlit Cloud.
 
 ---
 
-## 8. Próximas Etapas
+## 8. Etapa 3 — Módulo de Análise de Áudio
+
+### 9.1 Contexto e cenário clínico simulado
+
+O desafio sugere a análise de gravações de voz de pacientes em consultas
+para detectar sintomas relacionados à fala (fadiga, disartria). Optou-se
+por simular uma **sessão de triagem médica**, na qual o paciente responde
+a 12 frases curtas sobre seu estado de saúde e sintomas — formato real e
+comum em anamnese clínica.
+
+Três padrões de fala foram modelados, com base em sinais clínicos
+reconhecidos:
+
+| Anomalia de fala     | Significado clínico                                              |
+|------------------------|---------------------------------------------------------------------|
+| Fala lentificada/pausada | Possível fadiga extrema, confusão mental, ou disartria (ex.: AVC) |
+| Fala acelerada           | Possível agitação, ansiedade, taquilalia                          |
+| Fala normal              | Linha de base — referência para comparação estatística            |
+
+Como não há gravação de paciente real disponível, o áudio é **gerado
+localmente via TTS (Text-to-Speech)** com a biblioteca `pyttsx3`, que
+utiliza o motor de voz nativo do sistema operacional (SAPI5 no Windows) —
+sem necessidade de internet, sem custo, e sem envio de dados a serviços
+externos. As mesmas 12 frases são sintetizadas em três perfis de
+velocidade/pausa, com o tipo de anomalia conhecido a priori, funcionando
+como gabarito — mesmo princípio de avaliação quantitativa usado nas
+Etapas 1 e 2.
+
+### 9.2 Nota técnica — dependência do `ffmpeg` no pipeline do Whisper
+
+Durante a implementação, identificou-se que a biblioteca `openai-whisper`
+depende do executável de linha de comando `ffmpeg` para decodificar
+arquivos de áudio — uma dependência de sistema, não uma dependência
+Python, e portanto não resolvida automaticamente por `uv add`. Em um
+ambiente Windows limpo (sem Chocolatey, Scoop ou instalação manual prévia),
+essa chamada falha com `FileNotFoundError: [WinError 2]`.
+
+A solução adotada evita qualquer instalação manual fora do ecossistema
+gerenciado pelo projeto: o pacote `imageio-ffmpeg` (distribuído via PyPI)
+empacota um executável `ffmpeg` pré-compilado e o disponibiliza por meio
+de uma função Python (`imageio_ffmpeg.get_ffmpeg_exe()`). O módulo
+`audio_processor.py` localiza esse executável e o expõe no `PATH` do
+processo antes de qualquer chamada ao Whisper — de forma transparente,
+sem exigir nenhuma ação manual do usuário além de `uv add imageio-ffmpeg`.
+
+Essa decisão segue a mesma filosofia da nota técnica da Etapa 2 (Seção
+7.2): preservar a reprodutibilidade do ambiente inteiramente dentro do
+gerenciador de pacotes do projeto (`uv`), evitando dependências de
+sistema que comprometeriam a portabilidade entre máquinas e o deploy em
+ambiente de nuvem (Streamlit Cloud).
+
+### 9.3 Geração do áudio sintético (`src/audio/synthetic_audio.py`)
+
+Sintetiza 12 frases de triagem médica em arquivos `.wav` individuais,
+variando dois parâmetros do motor de TTS por frase:
+
+| Perfil        | Velocidade (palavras/min) | Pausa extra entre palavras | Frases |
+|------------------|------------------------------|-------------------------------|----------|
+| `normal`         | 180                          | 0 ms                           | 6        |
+| `fala_lenta`      | 90 (metade da velocidade)    | 350 ms                         | 3        |
+| `fala_rapida`     | 320 (quase o dobro)          | 0 ms                           | 3        |
+
+O módulo inclui também uma rotina de geração de **tons sintéticos**
+(`_generate_fallback_tone_audio()`), ativada automaticamente caso o
+motor de TTS do sistema não esteja disponível (cenário usado para testes
+de infraestrutura em ambiente Linux sem `espeak`, mas sem produzir fala
+real). Em ambiente Windows com SAPI5 — como o utilizado neste projeto —
+a geração de fala real ocorre normalmente.
+
+Saídas: `data/raw/audio_segments/frase_NN.wav` (um por frase) e
+`data/raw/audio_metadata.json` (gabarito com texto original, tipo de
+anomalia, parâmetros de TTS usados).
+
+### 9.4 Transcrição e extração de métricas (`src/audio/audio_processor.py`)
+
+Cada segmento de áudio é transcrito localmente com o modelo **Whisper
+"base"** (OpenAI, execução 100% local — nenhum áudio é enviado a
+serviços externos), forçando o idioma português para evitar
+autodetecção incorreta em frases curtas.
+
+A partir da transcrição e do áudio bruto, são extraídas quatro métricas
+por segmento:
+
+| Métrica               | Cálculo                                                | Relevância clínica                       |
+|-------------------------|-----------------------------------------------------------|---------------------------------------------|
+| `duration_seconds`       | Duração total do arquivo de áudio                          | Linha de base temporal                      |
+| `n_words_transcribed`    | Contagem de palavras no texto transcrito                   | Verificação de completude da transcrição    |
+| `words_per_second`       | Palavras transcritas ÷ duração                              | Velocidade de fala — indicador central      |
+| `silence_ratio`          | Proporção de janelas de 50ms com energia abaixo do limiar  | Proxy de pausas/hesitação na fala           |
+
+**Resultado da transcrição (execução real, sem dados simulados).** O
+Whisper reproduziu o texto original das 12 frases com fidelidade muito
+alta — por exemplo, *"Estou sentindo dor no peito"* foi transcrito como
+*"Estou sentindo dor num peito"*, uma variação fonética mínima e
+esperada, sem impacto na contagem de palavras ou nas métricas de
+velocidade. As métricas extraídas confirmaram separação estatística
+clara entre os três perfis:
+
+| Perfil        | Velocidade média (palavras/s) | Silêncio médio |
+|------------------|----------------------------------|-------------------|
+| `normal`          | ≈ 1,7                            | ≈ 45%             |
+| `fala_lenta`       | ≈ 0,6                            | ≈ 60%             |
+| `fala_rapida`      | ≈ 2,8                            | ≈ 34%             |
+
+### 9.5 Detecção de anomalias de fala (`src/audio/anomaly_detector.py`)
+
+Dois métodos combinados por OR lógico, seguindo a mesma filosofia das
+Etapas 1 e 2 (priorizar recall em contexto clínico):
+
+**1. Z-score sobre velocidade de fala.** Calcula o desvio estatístico de
+`words_per_second` em relação à média do conjunto de segmentos, marcando
+como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
+anormalmente lenta quanto anormalmente rápida.
+
+**2. Regras clínicas.** Duas regras complementares:
+
+- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+     1.0` — a combinação de ambos os critérios distingue hesitação
+     patológica de uma pausa natural entre frases;
+- Fala acelerada: `words_per_second` acima de um limiar adaptativo
+     (média + 1 desvio padrão do conjunto).
+
+**Resultados obtidos (execução real, sem dados simulados):**
+
+| Método              | Anomalias injetadas | Detectadas | Precisão | Recall | F1-Score |
+|------------------------|------------------------|----------------|--------------|------------|--------------|
+| Z-score                | 6                      | 1              | 1.000        | 0.167      | 0.286        |
+| Regras clínicas        | 6                      | 6              | 1.000        | 1.000      | 1.000        |
+| **Combinado (OR)**     | 6                      | 6              | **1.000**    | **1.000**  | **1.000**    |
+
+**Discussão.** As regras clínicas, calibradas especificamente para o
+comportamento esperado de cada perfil de fala, atingiram **desempenho
+perfeito** — todas as 6 anomalias injetadas (3 de fala lenta, 3 de fala
+rápida) foram corretamente identificadas, sem nenhum falso positivo
+entre os 6 segmentos normais. O z-score isolado teve recall baixo
+(0,167) porque o limiar de 1,5 desvios padrão, aplicado sobre um
+conjunto pequeno (12 segmentos) com alta variância entre os dois tipos
+opostos de anomalia (lenta vs. rápida), dilui a sensibilidade estatística
+— uma limitação conhecida de z-score em amostras pequenas e
+heterogêneas. A combinação OR preserva o resultado perfeito das regras
+clínicas, validando a abordagem de múltiplos detectores complementares
+adotada consistentemente desde a Etapa 1.
+
+Este resultado (F1 = 1.000) é o melhor entre os três módulos de
+detecção implementados até o momento, refletindo a maior clareza do
+sinal estatístico em métricas de fala (velocidade, silêncio) em
+comparação aos ângulos articulares da Etapa 2, cujas anomalias se
+desenrolam de forma mais gradual ao longo de múltiplos frames.
+
+### 9.6 Visualização (`src/audio/plotter.py`)
+
+Duas saídas visuais, seguindo o padrão estabelecido nas etapas
+anteriores:
+
+- **Painel de métricas** (`audio_metrics_panel.png`): dois subplots —
+  velocidade de fala e proporção de silêncio por segmento — com
+  marcadores de anomalia detectada (X vermelho) e gabarito (círculo
+  laranja vazado);
+- **Waveforms anotados** (`audio_waveforms/waveform_segment_NN.png`):
+  forma de onda de quatro segmentos representativos (normais e
+  anômalos), com o texto transcrito e a velocidade de fala sobrepostos
+  no título do gráfico.
+
+Ambas as saídas são gravadas em disco sem qualquer dependência de
+reprodução de áudio ou display gráfico, mantendo a compatibilidade com
+execução headless exigida pelo deploy no Streamlit Cloud.
+
+![Painel de métricas de fala](../data/processed/audio_metrics_panel.png)
+
+### 9.7 Síntese comparativa dos três módulos de detecção
+
+| Módulo            | Método combinado | Precisão | Recall | F1-Score |
+|----------------------|----------------------|--------------|------------|--------------|
+| Sinais vitais (Etapa 1) | Z-score + Isolation Forest | 0.667    | 1.000      | 0.800        |
+| Vídeo/postura (Etapa 2) | Z-score + Regras clínicas  | 1.000    | 0.567      | 0.723        |
+| Áudio/fala (Etapa 3)    | Z-score + Regras clínicas  | 1.000    | 1.000      | 1.000        |
+
+Os três módulos confirmam a validade da estratégia consistente adotada
+em todo o projeto: combinação de método estatístico (z-score) com
+conhecimento de domínio (regras clínicas ou Isolation Forest), priorizando
+recall sobre precisão sempre que esses dois objetivos entram em conflito.
+A variação no F1-Score entre módulos reflete a natureza distinta de cada
+sinal — eventos pontuais e extremos (vitais) favorecem alta precisão;
+processos graduais (postura) desafiam o recall; sinais com separação
+estatística clara entre classes (fala) permitem desempenho ótimo nos
+dois eixos.
+
+---
+
+## 9. Próximas Etapas
 
 - ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
-- Etapa 3: Transcrição e análise de áudio com Whisper local;
+- ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
 - Etapa 4: Integração com Groq API para extração de termos críticos,
   sentimento e sumarização;
 - Etapa 5: Motor de fusão multimodal e geração de alertas;
