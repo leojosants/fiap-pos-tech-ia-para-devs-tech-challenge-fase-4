@@ -46,8 +46,24 @@ load_dotenv()
 #
 # Valores padrão (fallback) caso as variáveis não estejam definidas no .env —
 # refletem os modelos vigentes na Groq API no momento do desenvolvimento.
-MODEL_FAST = os.environ.get("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
-MODEL_SMART = os.environ.get("GROQ_MODEL_SMART", "openai/gpt-oss-120b")
+def _read_model_config(key: str, default: str) -> str:
+    """
+    Lê o nome do modelo configurado, verificando st.secrets antes de
+    os.environ — mesma lógica de _get_secret(), duplicada aqui porque
+    estas constantes são avaliadas na importação do módulo (nível de
+    módulo), antes de qualquer função estar disponível para chamada.
+    """
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+
+MODEL_FAST = _read_model_config("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
+MODEL_SMART = _read_model_config("GROQ_MODEL_SMART", "openai/gpt-oss-120b")
 
 DEFAULT_MAX_TOKENS = 250
 DEFAULT_TEMPERATURE = 0.3   # baixa — queremos respostas consistentes/factuais
@@ -67,19 +83,55 @@ class GroqResponse:
     reasoning_tokens: int = 0
 
 
+def _get_secret(key: str) -> str | None:
+    """
+    Busca uma chave de configuração em duas fontes possíveis, na ordem:
+
+    1. st.secrets (mecanismo nativo do Streamlit Community Cloud) — os
+       "Secrets" configurados no painel do app NÃO geram um arquivo .env
+       no servidor; eles são expostos apenas via st.secrets, um dicionário
+       populado pelo próprio Streamlit a partir do TOML salvo no painel.
+    2. Variáveis de ambiente (os.environ) — caminho usado em desenvolvimento
+       local, onde python-dotenv carrega o arquivo .env para o ambiente do
+       processo.
+
+    Esta dupla verificação permite que o mesmo código funcione sem alteração
+    tanto localmente (via .env) quanto no deploy (via Secrets do Streamlit
+    Cloud) — ver nota de deploy no relatório técnico para o diagnóstico
+    completo deste comportamento, identificado durante a Etapa 8.
+    """
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        # st.secrets levanta erro se não houver nenhum secrets.toml E o
+        # módulo streamlit não estiver em um contexto de execução válido
+        # (ex.: rodando via linha de comando, fora do `streamlit run`).
+        # Cai silenciosamente para a verificação de variável de ambiente.
+        pass
+
+    return os.environ.get(key)
+
+
 def _get_client() -> Groq:
     """
-    Cria o cliente Groq a partir da chave configurada em .env.
+    Cria o cliente Groq a partir da chave configurada em st.secrets
+    (deploy no Streamlit Cloud) ou em variável de ambiente / .env
+    (desenvolvimento local).
 
-    Levanta erro claro e acionável se a variável de ambiente não existir,
-    em vez de deixar o SDK lançar um erro genérico de autenticação.
+    Levanta erro claro e acionável se a chave não existir em nenhuma das
+    duas fontes, em vez de deixar o SDK lançar um erro genérico de
+    autenticação.
     """
-    api_key = os.environ.get("GROQ_API_KEY")
+    api_key = _get_secret("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "GROQ_API_KEY não encontrada nas variáveis de ambiente. "
-            "Verifique se o arquivo .env existe na raiz do projeto e contém "
-            "GROQ_API_KEY=sua_chave_aqui (veja .env.example)."
+            "GROQ_API_KEY não encontrada. Em desenvolvimento local, "
+            "verifique se o arquivo .env existe na raiz do projeto e contém "
+            "GROQ_API_KEY=sua_chave_aqui (veja .env.example). Em deploy no "
+            "Streamlit Community Cloud, verifique a seção Secrets nas "
+            "configurações do app."
         )
     return Groq(api_key=api_key)
 
