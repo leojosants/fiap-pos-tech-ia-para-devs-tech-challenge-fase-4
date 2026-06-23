@@ -3,6 +3,64 @@
 **FIAP | Pós Tech em IA para Devs — Tech Challenge Fase 4**
 **Autor:** Leonardo José de Oliveira Santos (RM369985)
 **Repositório:** github.com/leojosants/fiap-pos-tech-ia-para-devs-tech-challenge-fase-4
+**Aplicação (Streamlit Cloud):** [A PREENCHER NA ETAPA 8 — DEPLOY]
+
+---
+
+## Sumário
+
+1. [Introdução e Contexto do Desafio](#1-introdução-e-contexto-do-desafio)
+2. [Adaptação Arquitetural: Azure/AWS → Soluções Locais + Groq API](#2-adaptação-arquitetural-azureaws--soluções-locais--groq-api)
+3. [Datasets Utilizados](#3-datasets-utilizados)
+4. [Arquitetura Geral do Sistema](#4-arquitetura-geral-do-sistema)
+5. [Etapa 1 — Módulo de Sinais Vitais](#5-etapa-1--módulo-de-sinais-vitais)
+6. [Estrutura do Projeto](#6-estrutura-do-projeto-estado-atual)
+7. [Etapa 2 — Módulo de Análise de Vídeo](#7-etapa-2--módulo-de-análise-de-vídeo)
+8. [Etapa 3 — Módulo de Análise de Áudio](#8-etapa-3--módulo-de-análise-de-áudio)
+9. [Etapa 4 — Camada de Integração com Groq API (LLM)](#9-etapa-4--camada-de-integração-com-groq-api-llm)
+10. [Etapa 5 — Motor de Fusão Multimodal e Alertas](#10-etapa-5--motor-de-fusão-multimodal-e-alertas)
+11. [Etapa 6 — Interface Streamlit](#11-etapa-6--interface-streamlit)
+12. [Resultados Consolidados](#12-resultados-consolidados)
+13. [Considerações Éticas](#13-considerações-éticas)
+14. [Limitações Gerais e Trabalhos Futuros](#14-limitações-gerais-e-trabalhos-futuros)
+15. [Como Reproduzir Este Projeto](#15-como-reproduzir-este-projeto)
+16. [Próximas Etapas](#16-próximas-etapas)
+
+---
+
+## Resumo Executivo
+
+O **MedWatch** é um sistema de monitoramento multimodal de pacientes
+hospitalares, desenvolvido para o Tech Challenge da Fase 4 (FIAP Pós
+Tech em IA para Devs). O sistema analisa três modalidades de dados de
+um paciente simulado — **sinais vitais**, **postura (vídeo)** e
+**fala (áudio)** — detecta anomalias em cada uma com métodos estatísticos
+e regras clínicas, interpreta o discurso do paciente com um modelo de
+linguagem (Groq API), e consolida tudo em um **alerta de risco** para a
+equipe médica, exibido em uma interface Streamlit interativa.
+
+Por limitação de hardware (já justificada no desafio da fase anterior),
+o projeto substitui os serviços em nuvem sugeridos no enunciado (Azure
+Speech, Azure Text Analytics, AWS Comprehend, OpenPose) por alternativas
+100% locais e gratuitas — MediaPipe, Whisper, scikit-learn — e por uma
+única chamada a um LLM externo (Groq API) apenas para tarefas de
+linguagem natural, nunca para processar áudio ou vídeo bruto. Essa
+decisão é detalhada e justificada na Seção 2.
+
+**Principais resultados** (dados sintéticos com gabarito conhecido,
+Seção 12): o detector de sinais vitais atingiu recall de 100% (zero
+anomalias reais perdidas); o detector de postura atingiu precisão de
+100% (zero falsos positivos); o detector de fala atingiu desempenho
+perfeito em ambas as métricas (precisão e recall de 100%); e o motor de
+fusão multimodal classificou corretamente o cenário de teste — com
+anomalias simultâneas nas três modalidades — como de nível **Crítico**,
+gerando um resumo clínico coerente via LLM.
+
+O sistema completo está disponível como aplicação interativa (Streamlit
+Cloud — link a preencher na Seção "Aplicação", Etapa 8) e como código-
+-fonte completo neste repositório, substituindo a entrega de vídeo de
+demonstração por esta combinação de relatório detalhado e aplicação
+operável diretamente pela banca.
 
 ---
 
@@ -347,7 +405,6 @@ captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
 Cloud, Seção 12 — a confirmar).
 
 Saídas geradas:
-
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
 - `data/raw/synthetic_pose_frames.npy` — array NumPy dos frames brutos,
   usado como *backup* para reprocessamento sem decodificar o `.mp4`.
@@ -399,9 +456,8 @@ quando o ângulo absoluto não excede um limiar fixo.
 
 **3. Regras clínicas.** Duas regras de limiar fixo, calibradas
 empiricamente para o dataset sintético:
-
-- Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
-- Colapso de tronco: z-score do deslocamento horizontal conjunto dos
+   - Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
+   - Colapso de tronco: z-score do deslocamento horizontal conjunto dos
      dois ombros `> 2.0` (captura quando ambos os ombros migram para o
      mesmo lado, característico de inclinação de tronco).
 
@@ -487,7 +543,7 @@ no Streamlit Cloud.
 
 ## 8. Etapa 3 — Módulo de Análise de Áudio
 
-### 9.1 Contexto e cenário clínico simulado
+### 8.1 Contexto e cenário clínico simulado
 
 O desafio sugere a análise de gravações de voz de pacientes em consultas
 para detectar sintomas relacionados à fala (fadiga, disartria). Optou-se
@@ -513,7 +569,7 @@ velocidade/pausa, com o tipo de anomalia conhecido a priori, funcionando
 como gabarito — mesmo princípio de avaliação quantitativa usado nas
 Etapas 1 e 2.
 
-### 9.2 Nota técnica — dependência do `ffmpeg` no pipeline do Whisper
+### 8.2 Nota técnica — dependência do `ffmpeg` no pipeline do Whisper
 
 Durante a implementação, identificou-se que a biblioteca `openai-whisper`
 depende do executável de linha de comando `ffmpeg` para decodificar
@@ -536,7 +592,7 @@ gerenciador de pacotes do projeto (`uv`), evitando dependências de
 sistema que comprometeriam a portabilidade entre máquinas e o deploy em
 ambiente de nuvem (Streamlit Cloud).
 
-### 9.3 Geração do áudio sintético (`src/audio/synthetic_audio.py`)
+### 8.3 Geração do áudio sintético (`src/audio/synthetic_audio.py`)
 
 Sintetiza 12 frases de triagem médica em arquivos `.wav` individuais,
 variando dois parâmetros do motor de TTS por frase:
@@ -558,7 +614,7 @@ Saídas: `data/raw/audio_segments/frase_NN.wav` (um por frase) e
 `data/raw/audio_metadata.json` (gabarito com texto original, tipo de
 anomalia, parâmetros de TTS usados).
 
-### 9.4 Transcrição e extração de métricas (`src/audio/audio_processor.py`)
+### 8.4 Transcrição e extração de métricas (`src/audio/audio_processor.py`)
 
 Cada segmento de áudio é transcrito localmente com o modelo **Whisper
 "base"** (OpenAI, execução 100% local — nenhum áudio é enviado a
@@ -589,7 +645,7 @@ clara entre os três perfis:
 | `fala_lenta`       | ≈ 0,6                            | ≈ 60%             |
 | `fala_rapida`      | ≈ 2,8                            | ≈ 34%             |
 
-### 9.5 Detecção de anomalias de fala (`src/audio/anomaly_detector.py`)
+### 8.5 Detecção de anomalias de fala (`src/audio/anomaly_detector.py`)
 
 Dois métodos combinados por OR lógico, seguindo a mesma filosofia das
 Etapas 1 e 2 (priorizar recall em contexto clínico):
@@ -600,11 +656,10 @@ como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
 anormalmente lenta quanto anormalmente rápida.
 
 **2. Regras clínicas.** Duas regras complementares:
-
-- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+   - Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
      1.0` — a combinação de ambos os critérios distingue hesitação
      patológica de uma pausa natural entre frases;
-- Fala acelerada: `words_per_second` acima de um limiar adaptativo
+   - Fala acelerada: `words_per_second` acima de um limiar adaptativo
      (média + 1 desvio padrão do conjunto).
 
 **Resultados obtidos (execução real, sem dados simulados):**
@@ -634,7 +689,7 @@ sinal estatístico em métricas de fala (velocidade, silêncio) em
 comparação aos ângulos articulares da Etapa 2, cujas anomalias se
 desenrolam de forma mais gradual ao longo de múltiplos frames.
 
-### 9.6 Visualização (`src/audio/plotter.py`)
+### 8.6 Visualização (`src/audio/plotter.py`)
 
 Duas saídas visuais, seguindo o padrão estabelecido nas etapas
 anteriores:
@@ -654,7 +709,7 @@ execução headless exigida pelo deploy no Streamlit Cloud.
 
 ![Painel de métricas de fala](imagens/audio_metrics_panel.png)
 
-### 9.7 Síntese comparativa dos três módulos de detecção
+### 8.7 Síntese comparativa dos três módulos de detecção
 
 | Módulo            | Método combinado | Precisão | Recall | F1-Score |
 |----------------------|----------------------|--------------|------------|--------------|
@@ -757,13 +812,12 @@ strings espalhadas pelo código.
 
 **Prompt de análise de texto.** Solicita ao modelo `gpt-oss-20b` que
 responda exclusivamente em JSON estrito, extraindo:
-
-- `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
-- `sentimento`: positivo, neutro ou negativo;
-- `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
+   - `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
+   - `sentimento`: positivo, neutro ou negativo;
+   - `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
      prompt distinguindo sintomas potencialmente graves (dor no peito,
      falta de ar, fraqueza súbita) de queixas moderadas ou neutras;
-- `justificativa`: explicação breve, útil para auditoria humana da
+   - `justificativa`: explicação breve, útil para auditoria humana da
      decisão do modelo.
 
 Como modelos de linguagem ocasionalmente envolvem o JSON em texto
@@ -1148,7 +1202,260 @@ A aplicação foi validada em duas frentes complementares:
 
 ---
 
-## 12. Próximas Etapas
+## 12. Resultados Consolidados
+
+A tabela abaixo reúne as métricas de avaliação de todos os módulos de
+detecção de anomalias do projeto, permitindo comparação direta entre
+modalidades. Em todos os casos, a avaliação é feita contra um gabarito
+sintético conhecido (`is_injected_anomaly`), seguindo o mesmo princípio
+metodológico desde a Etapa 1 (Seção 5.1).
+
+| Módulo                  | Método combinado                       | Precisão  | Recall    | F1-Score  | Seção de referência |
+|----------------------------|---------------------------------------------|---------------|---------------|---------------|--------------------------|
+| Sinais vitais (Etapa 1)    | Z-score + Isolation Forest                   | 0,667         | **1,000**     | 0,800         | 5.2                      |
+| Postura/vídeo (Etapa 2)    | Z-score (assimetria/velocidade) + regras     | **1,000**     | 0,567         | 0,723         | 7.5                      |
+| Fala/áudio (Etapa 3)       | Z-score (velocidade) + regras clínicas       | **1,000**     | **1,000**     | **1,000**     | 8.5                      |
+
+**Leitura dos resultados.** Os três módulos demonstram a mesma decisão
+metodológica de fundo — combinar um método estatístico (z-score) com
+conhecimento de domínio (regras clínicas explícitas ou Isolation
+Forest) — mas exibem perfis de erro distintos, explicados pela natureza
+de cada sinal:
+
+- **Vitais**: recall perfeito, precisão moderada. As anomalias
+  injetadas são picos estatisticamente extremos e pontuais — fáceis de
+  *não perder* (alto recall), mas o Isolation Forest ocasionalmente
+  marca pontos normais como anômalos (precisão de 66,7%), aceitável em
+  triagem onde over-alerta é preferível a sub-alerta.
+- **Postura**: precisão perfeita, recall moderado. As anomalias se
+  desenrolam ao longo de várias frames (não em um instante isolado), e
+  os frames de transição (entrada/saída do movimento patológico) são
+  estatisticamente mais próximos do padrão normal — reduzindo o recall
+  sem produzir nenhum falso positivo.
+- **Fala**: desempenho perfeito em ambas as métricas, beneficiado por
+  uma separação estatística mais nítida entre os três perfis de
+  velocidade de fala (normal ≈1,7 palavras/s; lenta ≈0,6; rápida ≈2,8) —
+  Seção 8.4.
+
+**Resultado do motor de fusão (Etapa 5, Seção 10.7).** No cenário de
+teste utilizado (com anomalias deliberadamente injetadas nas três
+modalidades), o motor de fusão classificou corretamente o nível de
+alerta como **Crítico**, por dois critérios independentes e
+simultâneos: contagem de modalidades anômalas (3 de 3) e nível de
+urgência apontado pela análise de linguagem ("alto"). O resumo clínico
+gerado pelo LLM (`gpt-oss-120b`) conectou corretamente os achados
+das três modalidades em uma interpretação clínica coerente, sem
+extrapolar além dos dados fornecidos (validado nas Seções 9.5 e 10.7).
+
+**Exemplos de anomalias detectadas** (requisito explícito do desafio —
+ver Seção 1):
+
+- *Sinais vitais*: bradicardia (frequência cardíaca mínima de 37 bpm),
+  hipóxia (SpO₂ mínimo de 83%) e hipotensão (pressão sistólica mínima de
+  74 mmHg) — Seção 5.1.
+- *Postura*: hiperextensão de ombro (ângulo acima de 170°), assimetria
+  bilateral entre braços (diferença angular acima de 25°) e inclinação
+  anômala de tronco — Seção 7.5.
+- *Fala*: fala lentificada (≈0,6 palavras/s, ≈60% de silêncio,
+  compatível com fadiga ou confusão mental) e fala acelerada (≈2,8
+  palavras/s, compatível com agitação ou ansiedade) — Seção 8.5.
+
+---
+
+## 13. Considerações Éticas
+
+O desenvolvimento de sistemas de IA aplicados à saúde exige atenção
+redobrada a riscos que vão além da performance técnica dos modelos.
+Esta seção documenta as decisões éticas tomadas no projeto.
+
+**Privacidade de dados clínicos.** A decisão arquitetural central deste
+projeto (Seção 2) — processar vídeo, áudio e sinais vitais inteiramente
+de forma local — foi motivada primariamente por essa preocupação: dados
+de pacientes reais (voz, imagem corporal, sinais vitais) são
+informações sensíveis sob a LGPD (Lei Geral de Proteção de Dados) e,
+internacionalmente, sob regulações como a HIPAA. Ao eliminar o envio de
+áudio e vídeo brutos a qualquer serviço de terceiros, o projeto reduz a
+superfície de risco de exposição de dados sensíveis ao mínimo
+necessário — apenas texto já transcrito (e despojado de metadados de
+áudio/vídeo) é enviado à Groq API, exclusivamente para tarefas de
+linguagem natural.
+
+**Uso de dados sintéticos.** Todos os dados processados neste projeto
+são gerados sinteticamente (Seção 3), nunca provenientes de pacientes
+reais. Essa escolha, motivada inicialmente por razões técnicas
+(controle de gabarito, ausência de hardware de captura — Seção 1),
+também elimina por completo qualquer risco de privacidade ou
+necessidade de consentimento informado durante o desenvolvimento e a
+demonstração do sistema à banca.
+
+**Transparência e auditabilidade da decisão de IA.** O motor de fusão
+(Seção 10) foi deliberadamente projetado para produzir uma
+**justificativa textual explícita** para cada nível de alerta (campo
+`reasoning`, Seção 10.2), e o prompt de sumarização clínica (Seção 9.4)
+instrui o LLM a basear-se exclusivamente nos dados fornecidos, sem
+inferir sintomas não relatados. Essa decisão visa mitigar o risco de
+"caixa-preta" em decisões que podem influenciar a priorização de
+atendimento médico — um princípio de IA responsável especialmente
+relevante em contexto clínico, onde decisões não auditáveis podem
+ocultar viés ou erro sistemático.
+
+**Limites do sistema como ferramenta de apoio, não substituição
+clínica.** O MedWatch foi concebido como uma camada de triagem e
+priorização de atenção — nunca como substituto do julgamento de um
+profissional de saúde. O próprio prompt de sumarização (Seção 9.4)
+formula recomendações como "realizar avaliação médica imediata", nunca
+como diagnóstico definitivo. Esse posicionamento é consistente com a
+literatura de ética em IA médica, que recomenda sistemas de "human-in-
+-the-loop" para decisões de alto risco.
+
+**Viés e generalização.** Por se basear inteiramente em dados
+sintéticos com características estatísticas conhecidas (Seção 3), o
+sistema não foi validado contra a diversidade de apresentações clínicas
+reais (diferentes idades, condições pré-existentes, sotaques na fala,
+tons de pele na análise de vídeo, etc.). Essa é uma limitação
+reconhecida e discutida na Seção 14 — qualquer uso além de fins
+acadêmicos/demonstrativos exigiria validação extensiva com dados reais
+e diversos, sob supervisão de profissionais de saúde e comitê de ética
+em pesquisa.
+
+---
+
+## 14. Limitações Gerais e Trabalhos Futuros
+
+Esta seção consolida as limitações específicas já discutidas em cada
+etapa (Seções 7.7, 9.2-9.3, 10.5, 11.3-11.4) sob uma perspectiva de
+projeto como um todo.
+
+**Dados exclusivamente sintéticos.** Conforme discutido na Seção 13, a
+ausência de dados reais é a limitação mais fundamental do projeto. Os
+detectores foram calibrados (limiares de z-score, regras clínicas) para
+o comportamento estatístico específico dos dados sintéticos gerados —
+um trabalho futuro essencial seria validar e recalibrar esses limiares
+contra datasets reais (ex.: MIT-BIH Arrhythmia Database para vitais,
+mencionado mas não utilizado diretamente — Seção 3).
+
+**Recall moderado no módulo de postura (Seção 7.5).** Como discutido,
+56,7% de recall significa que mais de 40% dos frames dentro de uma
+janela de anomalia não disparam o detector. Uma extensão futura com
+suavização temporal (média móvel) ou classificação por janela completa
+(em vez de frame a frame) tenderia a melhorar esse recall sem
+sacrificar a precisão atualmente perfeita.
+
+**Dependência de modelos externos sujeitos a depreciação (Seção 9.2).**
+A própria experiência deste projeto — com a depreciação de
+`llama-3.3-70b-versatile` ocorrendo *durante* o desenvolvimento —
+demonstra que qualquer integração com LLMs de terceiros carrega risco
+de obsolescência de modelo. A mitigação adotada (configuração via
+`.env`) reduz o custo de adaptação, mas não elimina a dependência
+estrutural de um provedor externo para a camada de interpretação de
+linguagem.
+
+**Processamento sequencial, não em tempo real.** O desafio menciona
+"alertas... em tempo real" (Seção 1); a implementação atual processa
+lotes de dados sintéticos pré-gerados (600 amostras de vitais, 300
+frames de vídeo, 12 frases de áudio) em uma única execução de
+30-60 segundos, e não um fluxo contínuo de streaming. Uma arquitetura
+de produção real exigiria processamento incremental (ex.: janela
+deslizante sobre um stream de sensores) — fora do escopo demonstrativo
+deste Tech Challenge, mas relevante para uma eventual evolução do
+projeto.
+
+**Geração de vídeo dependente de codec não determinístico (Seção
+11.4).** A disponibilidade de codecs de vídeo variou entre os ambientes
+de desenvolvimento testados (Linux sandbox e Windows), exigindo uma
+estratégia de fallback. Embora funcional, essa característica introduz
+uma fonte de variabilidade entre ambientes que merece atenção
+redobrada no momento do deploy final (Streamlit Cloud, Seção 15).
+
+**Escala do dataset de teste.** Os datasets sintéticos (600 amostras de
+vitais, 300 frames de vídeo, 12 frases de áudio) são suficientes para
+demonstrar e validar a lógica dos detectores, mas pequenos demais para
+conclusões estatisticamente robustas sobre desempenho generalizado —
+adequados ao propósito demonstrativo deste projeto, não a uma validação
+científica formal.
+
+---
+
+## 15. Como Reproduzir Este Projeto
+
+Esta seção consolida, em um único lugar, os passos para que a banca (ou
+qualquer pessoa) reproduza o projeto localmente — complementando o
+acesso à aplicação publicada no Streamlit Cloud (link na capa deste
+relatório, a preencher na Etapa 8).
+
+### 15.1 Pré-requisitos
+
+- Python 3.12.9
+- [uv](https://docs.astral.sh/uv/) como gerenciador de pacotes e ambiente
+- Chave de API da Groq (gratuita em [console.groq.com](https://console.groq.com))
+- Sistema operacional com motor de TTS disponível para geração de áudio
+  sintético (SAPI5 no Windows, nativo; em Linux, requer `espeak`/`espeak-ng`
+  instalado via gerenciador de pacotes do sistema — ver Seção 8.3)
+
+### 15.2 Instalação
+
+```powershell
+git clone git@github.com:leojosants/fiap-pos-tech-ia-para-devs-tech-challenge-fase-4.git
+cd fiap-pos-tech-ia-para-devs-tech-challenge-fase-4
+uv sync
+```
+
+Copie `.env.example` para `.env` e preencha `GROQ_API_KEY` com sua
+chave. As variáveis `GROQ_MODEL_FAST` e `GROQ_MODEL_SMART` já vêm
+preenchidas com os modelos vigentes no momento da entrega (ver nota
+sobre depreciação de modelos, Seção 9.2).
+
+### 15.3 Execução via interface Streamlit (recomendado)
+
+```powershell
+uv run streamlit run main.py
+```
+
+Abre automaticamente em `http://localhost:8501`. Clique em
+"▶️ Executar Monitoramento Completo" e aguarde a barra de progresso
+(30-60 segundos, inclui transcrição via Whisper e duas chamadas à Groq
+API). Ver Seção 11 para detalhes da interface.
+
+### 15.4 Execução módulo a módulo (para inspeção/depuração)
+
+Cada etapa pode ser executada isoladamente via linha de comando, na
+ordem abaixo (necessária pois etapas posteriores consomem arquivos
+gerados pelas anteriores):
+
+```powershell
+# Etapa 1 — Sinais vitais
+uv run python -m src.vitals.generator
+uv run python -m src.vitals.detector
+uv run python -m src.vitals.plotter
+
+# Etapa 2 — Vídeo/postura
+uv run python -m src.video.synthetic_video
+uv run python -m src.video.video_processor
+uv run python -m src.video.anomaly_detector
+uv run python -m src.video.plotter
+
+# Etapa 3 — Áudio/fala
+uv run python -m src.audio.synthetic_audio
+uv run python -m src.audio.audio_processor
+uv run python -m src.audio.anomaly_detector
+uv run python -m src.audio.plotter
+
+# Etapa 4 — LLM (Groq API)
+uv run python -m src.llm.groq_client       # teste de conectividade
+uv run python -m src.llm.text_analyzer
+uv run python -m src.llm.summarizer
+
+# Etapa 5 — Fusão multimodal e alertas (pipeline completo)
+uv run python -m src.alerts.run_pipeline
+```
+
+Os artefatos visuais (gráficos, vídeo sintético, dashboard) são salvos
+em `data/processed/`; uma cópia das imagens citadas neste relatório está
+versionada em `docs/imagens/`.
+
+---
+
+## 16. Próximas Etapas
 
 - ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
 - ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
@@ -1156,10 +1463,10 @@ A aplicação foi validada em duas frentes complementares:
   sentimento e sumarização~~ ✅ **Concluída**
 - ~~Etapa 5: Motor de fusão multimodal e geração de alertas~~ ✅ **Concluída**
 - ~~Etapa 6: Interface Streamlit~~ ✅ **Concluída**
-- Etapa 7: Consolidação final do relatório técnico;
+- ~~Etapa 7: Consolidação final do relatório técnico~~ ✅ **Concluída**
 - Etapa 8: Deploy no Streamlit Cloud.
 
 ---
 
 *Este relatório é um documento vivo, atualizado incrementalmente conforme
-o desenvolvimento avança.*
+o desenvolvimento avança. Última consolidação: Etapa 7.*
