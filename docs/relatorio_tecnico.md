@@ -24,7 +24,6 @@
 13. [Considerações Éticas](#13-considerações-éticas)
 14. [Limitações Gerais e Trabalhos Futuros](#14-limitações-gerais-e-trabalhos-futuros)
 15. [Como Reproduzir Este Projeto](#15-como-reproduzir-este-projeto)
-16. [Próximas Etapas](#16-próximas-etapas)
 
 ---
 
@@ -56,11 +55,14 @@ fusão multimodal classificou corretamente o cenário de teste — com
 anomalias simultâneas nas três modalidades — como de nível **Crítico**,
 gerando um resumo clínico coerente via LLM.
 
-O sistema completo está disponível como aplicação interativa (Streamlit
-Cloud — link a preencher na Seção "Aplicação", Etapa 8) e como código-
--fonte completo neste repositório, substituindo a entrega de vídeo de
-demonstração por esta combinação de relatório detalhado e aplicação
-operável diretamente pela banca.
+**Sobre a ausência de vídeo de demonstração:** por limitação de hardware
+(já comunicada e justificada em desafio de fase anterior), este projeto
+não inclui vídeo gravado. Este relatório foi escrito para funcionar como
+a apresentação do projeto — detalhando, etapa por etapa, decisões de
+design, problemas reais e suas correções, e resultados obtidos — e é
+complementado pela aplicação Streamlit publicada (link na capa), que
+permite à banca operar o sistema diretamente. Ver Seção 1.1 para detalhes
+completos desta decisão.
 
 ---
 
@@ -85,6 +87,36 @@ Cognitive Services, AWS Comprehend) para parte dessas tarefas. Por motivos
 detalhados na Seção 2, este projeto adota uma arquitetura alternativa,
 substituindo tais serviços por processamento local e por uma API de LLM
 de terceiros (Groq).
+
+### 1.1 Nota importante sobre a forma desta entrega
+
+**Este projeto não inclui vídeo de demonstração gravado.** O autor não
+dispõe, no momento desta entrega, de recursos de hardware suficientes
+para gravar a tela com qualidade adequada durante a execução do sistema
+— limitação já comunicada e justificada perante a coordenação do curso
+em desafio de fase anterior.
+
+Em substituição ao vídeo, esta entrega é composta por dois artefatos
+complementares, deliberadamente elaborados com um nível de detalhe
+acima do habitual exatamente para preencher essa lacuna:
+
+1. **Este relatório técnico** — escrito para funcionar como uma
+   apresentação narrada, página a página: cada etapa do projeto inclui
+   não apenas o que foi construído, mas o raciocínio de cada decisão de
+   design, os problemas reais encontrados durante o desenvolvimento e
+   como foram diagnosticados e corrigidos, e os resultados obtidos com
+   números e evidências visuais. A leitura sequencial das Seções 5 a 11
+   reproduz, em texto, a mesma jornada que um vídeo de demonstração
+   percorreria oralmente.
+2. **A aplicação Streamlit publicada** (link na capa deste documento,
+   Etapa 8) — permite que a própria banca execute o sistema
+   interativamente, com um único clique, sem depender de nenhuma
+   narração gravada para comprovar que o sistema funciona de fato.
+
+Essa combinação — relatório detalhado por escrito + aplicação operável
+diretamente pela banca — foi a estratégia escolhida para que a ausência
+de vídeo não represente perda de informação ou de capacidade de
+avaliação do trabalho, apenas uma mudança no formato de apresentação.
 
 ---
 
@@ -1452,21 +1484,3 @@ uv run python -m src.alerts.run_pipeline
 Os artefatos visuais (gráficos, vídeo sintético, dashboard) são salvos
 em `data/processed/`; uma cópia das imagens citadas neste relatório está
 versionada em `docs/imagens/`.
-
----
-
-## 16. Próximas Etapas
-
-- ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
-- ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
-- ~~Etapa 4: Integração com Groq API para extração de termos críticos,
-  sentimento e sumarização~~ ✅ **Concluída**
-- ~~Etapa 5: Motor de fusão multimodal e geração de alertas~~ ✅ **Concluída**
-- ~~Etapa 6: Interface Streamlit~~ ✅ **Concluída**
-- ~~Etapa 7: Consolidação final do relatório técnico~~ ✅ **Concluída**
-- Etapa 8: Deploy no Streamlit Cloud.
-
----
-
-*Este relatório é um documento vivo, atualizado incrementalmente conforme
-o desenvolvimento avança. Última consolidação: Etapa 7.*
