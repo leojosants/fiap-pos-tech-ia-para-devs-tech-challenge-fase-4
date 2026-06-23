@@ -129,15 +129,41 @@ def generate_clinical_summary(
     # max_tokens generoso: cobre o orçamento de "reasoning" interno do
     # modelo gpt-oss-120b somado a uma resposta de até ~150 palavras em
     # português (a resposta em português consome mais tokens por palavra
-    # que o inglês). Valor calibrado para evitar truncamento observado
-    # durante o desenvolvimento (ver relatório técnico).
-    response = call_groq(messages, model=MODEL_SMART, max_tokens=700)
+    # que o inglês). O modelo de 120B observou-se consumir uma fração de
+    # reasoning maior que o de 20B (Etapa 4), exigindo um limite mais alto.
+    response = call_groq(messages, model=MODEL_SMART, max_tokens=1200)
 
     if not response.success:
         return ClinicalSummaryResult(
             success=False,
             summary_text="",
             error_message=response.error_message,
+        )
+
+    if not response.content:
+        # Mesmo modo de falha silenciosa documentado na Etapa 4: chamada
+        # com sucesso, mas conteúdo vazio por esgotamento do orçamento de
+        # tokens em reasoning. Uma tentativa extra com limite ainda maior.
+        response = call_groq(messages, model=MODEL_SMART, max_tokens=1600)
+
+    if not response.success or not response.content:
+        return ClinicalSummaryResult(
+            success=False,
+            summary_text="",
+            error_message=response.error_message or
+                "Resposta vazia da API mesmo após nova tentativa com mais tokens.",
+        )
+
+    # Verifica se a resposta parece truncada no meio de uma frase (não
+    # termina em pontuação final) — sintoma de truncamento por limite de
+    # tokens mesmo quando o conteúdo não veio vazio. Loga como aviso para
+    # facilitar diagnóstico, sem impedir o uso do texto parcial.
+    final_chars = ('.', '!', '?', '"', "'")
+    if response.content and response.content[-1] not in final_chars:
+        import warnings
+        warnings.warn(
+            "Resumo clínico pode estar truncado (não termina em pontuação "
+            "final). Considere aumentar max_tokens se isso persistir."
         )
 
     return ClinicalSummaryResult(
