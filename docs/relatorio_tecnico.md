@@ -54,13 +54,14 @@ justificativa é tripla:
 | Requisito do desafio              | Serviço sugerido (Azure/AWS) | Solução adotada                  |
 |------------------------------------|-------------------------------|-----------------------------------|
 | Transcrição de áudio               | Azure Speech to Text          | Whisper (OpenAI, execução local)  |
-| Análise de sentimento/termos       | Azure Text Analytics / AWS Comprehend | Groq API (LLM)             |
+| Análise de sentimento/termos       | Azure Text Analytics / AWS Comprehend | Groq API (modelo openai/gpt-oss-20b)² |
 | Análise postural em vídeo          | OpenPose                      | MediaPipe Pose (Google) + extração analítica de pose¹ |
-| Sumarização de laudos              | —                              | Groq API (LLM)                    |
+| Sumarização de laudos              | —                              | Groq API (modelo openai/gpt-oss-120b)² |
 | Detecção de anomalias em séries    | —                              | Z-score + Isolation Forest (scikit-learn) |
 | LLM para tarefas de linguagem      | OpenAI GPT                    | Groq API (compatível com SDK OpenAI) |
 
-¹ Ver nota técnica na Seção 8.2 sobre a adaptação de API do MediaPipe 0.10.x.
+¹ Ver nota técnica na Seção 7.2 sobre a adaptação de API do MediaPipe 0.10.x.
+² Modelos vigentes no momento da entrega — ver nota técnica na Seção 9.2 sobre depreciação de modelos pela Groq e a estratégia de configuração via .env adotada para mitigar esse risco.
 
 A Groq API foi escolhida em vez da OpenAI por oferecer inferência de alta
 velocidade a custo reduzido, mantendo compatibilidade de interface com o
@@ -236,6 +237,11 @@ injetadas, validando a eficácia da estratégia combinada.
 │   │   ├── audio_processor.py
 │   │   ├── anomaly_detector.py
 │   │   └── plotter.py
+│   ├── llm/
+│   │   ├── groq_client.py
+│   │   ├── prompts.py
+│   │   ├── text_analyzer.py
+│   │   └── summarizer.py
 │   ├── vitals/
 │   │   ├── generator.py
 │   │   ├── detector.py
@@ -332,7 +338,6 @@ captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
 Cloud, Seção 12 — a confirmar).
 
 Saídas geradas:
-
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
 - `data/raw/synthetic_pose_frames.npy` — array NumPy dos frames brutos,
   usado como *backup* para reprocessamento sem decodificar o `.mp4`.
@@ -384,9 +389,8 @@ quando o ângulo absoluto não excede um limiar fixo.
 
 **3. Regras clínicas.** Duas regras de limiar fixo, calibradas
 empiricamente para o dataset sintético:
-
-- Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
-- Colapso de tronco: z-score do deslocamento horizontal conjunto dos
+   - Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
+   - Colapso de tronco: z-score do deslocamento horizontal conjunto dos
      dois ombros `> 2.0` (captura quando ambos os ombros migram para o
      mesmo lado, característico de inclinação de tronco).
 
@@ -585,11 +589,10 @@ como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
 anormalmente lenta quanto anormalmente rápida.
 
 **2. Regras clínicas.** Duas regras complementares:
-
-- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+   - Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
      1.0` — a combinação de ambos os critérios distingue hesitação
      patológica de uma pausa natural entre frases;
-- Fala acelerada: `words_per_second` acima de um limiar adaptativo
+   - Fala acelerada: `words_per_second` acima de um limiar adaptativo
      (média + 1 desvio padrão do conjunto).
 
 **Resultados obtidos (execução real, sem dados simulados):**
@@ -659,12 +662,200 @@ dois eixos.
 
 ---
 
-## 9. Próximas Etapas
+## 9. Etapa 4 — Camada de Integração com Groq API (LLM)
+
+### 9.1 Contexto e papel desta etapa
+
+Diferente das Etapas 1-3, que produzem dados sintéticos e os analisam com
+métodos estatísticos/determinísticos, a Etapa 4 introduz uma **camada de
+IA generativa** que consome os textos já produzidos pela Etapa 3
+(transcrição de fala) e cruza os resultados das três modalidades em uma
+interpretação clínica de alto nível — papel equivalente ao Azure Text
+Analytics, AWS Comprehend e à sumarização de laudos sugeridos no desafio
+original (ver Tabela 1, Seção 2).
+
+A substituição adotada usa a **Groq API** com modelos de linguagem
+open-weight (família `gpt-oss`, da OpenAI, hospedada em hardware LPU da
+Groq), mantendo compatibilidade estrutural com o SDK da OpenAI
+(`client.chat.completions.create`) — o mesmo padrão de chamada ensinado
+nas aulas do curso sobre a API do GPT.
+
+Duas tarefas distintas, dois modelos distintos:
+
+| Tarefa                                  | Modelo usado          | Justificativa                                  |
+|---------------------------------------------|---------------------------|-----------------------------------------------------|
+| Extração de termos críticos e classificação | `openai/gpt-oss-20b`      | Tarefa estruturada e simples — prioriza velocidade e custo |
+| Sumarização clínica multimodal              | `openai/gpt-oss-120b`     | Exige raciocínio sobre múltiplas fontes de evidência simultâneas |
+
+### 9.2 Nota técnica — depreciação de modelos durante o desenvolvimento
+
+Em 17 de junho de 2026 — durante o desenvolvimento deste projeto — a Groq
+anunciou a depreciação dos modelos originalmente planejados
+(`llama-3.3-70b-versatile` e `llama-3.1-8b-instant`), recomendando
+migração para a família `gpt-oss`. Este é um exemplo real de um risco
+inerente a qualquer integração com API de terceiros em rápida evolução:
+o modelo certo hoje pode não estar disponível na próxima sprint.
+
+Duas decisões de design mitigam esse risco:
+
+1. **Nomes de modelo nunca hardcoded no código.** As variáveis
+   `GROQ_MODEL_FAST` e `GROQ_MODEL_SMART` são lidas do arquivo `.env`
+   (com fallback para os valores vigentes no código, caso as variáveis
+   não estejam definidas). Uma futura depreciação exige apenas a
+   atualização de uma linha de configuração, sem alterar nenhum
+   arquivo `.py`.
+2. **Falhas da API nunca travam o pipeline.** A função `call_groq()`
+   (`src/llm/groq_client.py`) nunca levanta exceção — em caso de erro,
+   retorna um objeto `GroqResponse` com `success=False` e a mensagem de
+   erro, permitindo que módulos consumidores (como o motor de fusão da
+   Etapa 5) degradem graciosamente em vez de travar todo o sistema caso
+   a API esteja indisponível.
+
+### 9.3 Nota técnica — tokens de raciocínio dos modelos `gpt-oss`
+
+Durante os testes, identificou-se um comportamento relevante para
+qualquer integração com modelos de raciocínio: a família `gpt-oss`
+consome parte do orçamento de `max_tokens` em um campo interno de
+`reasoning` (observado entre ~30 e ~130 tokens nas chamadas deste
+projeto) **antes** de gerar a resposta final visível. Com um limite de
+tokens baixo, é possível que o modelo gaste todo o orçamento racionando
+e retorne `success=True` com **conteúdo vazio** — um modo de falha
+silenciosa, já que não é sinalizado como erro pela API.
+
+Esse comportamento foi observado de forma reprodutível: a frase
+*"Minha visão está embaçada"* retornou conteúdo vazio com `max_tokens=200`,
+mesmo com chamadas estruturalmente idênticas a outras frases tendo
+sucesso. A correção adotada em `src/llm/text_analyzer.py` foi dupla:
+
+1. Aumentar o orçamento de tokens para um valor com margem de segurança
+   generosa (400, e 700 na sumarização, que produz textos mais longos);
+2. Implementar uma segunda tentativa automática com orçamento ainda
+   maior (600) especificamente para o caso de resposta vazia — sem
+   mascarar falhas reais de API, que continuam sendo reportadas
+   normalmente em `llm_error`.
+
+Esse ajuste eliminou completamente o problema nos testes subsequentes
+(Seção 9.5).
+
+### 9.4 Prompts e extração estruturada (`src/llm/prompts.py`, `text_analyzer.py`)
+
+Os prompts são centralizados em um único módulo (`prompts.py`) — boa
+prática que facilita auditoria e ajuste fino sem precisar localizar
+strings espalhadas pelo código.
+
+**Prompt de análise de texto.** Solicita ao modelo `gpt-oss-20b` que
+responda exclusivamente em JSON estrito, extraindo:
+   - `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
+   - `sentimento`: positivo, neutro ou negativo;
+   - `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
+     prompt distinguindo sintomas potencialmente graves (dor no peito,
+     falta de ar, fraqueza súbita) de queixas moderadas ou neutras;
+   - `justificativa`: explicação breve, útil para auditoria humana da
+     decisão do modelo.
+
+Como modelos de linguagem ocasionalmente envolvem o JSON em texto
+explicativo ou marcadores de código (` ```json `), o módulo implementa
+um parser tolerante (`_parse_json_response()`) que extrai o primeiro
+objeto JSON válido da resposta via expressão regular, com fallback
+seguro (valores neutros) em caso de falha total de parsing.
+
+### 9.5 Resultado da análise de texto (execução real, sem dados simulados)
+
+Aplicado às 12 frases transcritas pelo Whisper na Etapa 3, o modelo
+`gpt-oss-20b` produziu classificações coerentes com o conteúdo clínico
+de cada frase:
+
+| Frase (transcrita)                | Sentimento | Urgência | Termos críticos        |
+|---------------------------------------|----------------|--------------|------------------------------|
+| "Estou me sentindo bem hoje"          | positivo       | baixo        | —                             |
+| "Estou sentindo dor num peito"        | negativo       | **alto**     | dor, peito                   |
+| "Minha visão está embaçada"           | negativo       | médio        | visão embaçada                |
+| "Sinto uma fraqueza no braço"         | neutro         | médio        | fraqueza, braço               |
+| "Estou muito ansioso e agitado"       | negativo       | médio        | ansioso, agitado              |
+| "Preciso de ajuda agora mesmo"        | negativo       | **alto**     | —                             |
+| "Estou calmo e tranquilo agora"       | positivo       | baixo        | —                             |
+
+O modelo classificou corretamente como urgência **alta** as duas frases
+com indicação clínica mais grave (dor no peito; pedido explícito de
+ajuda), e como urgência **média** as frases de sintoma moderado
+(visão embaçada, fraqueza, agitação) — validando a adequação do prompt
+ao critério clínico desejado sem qualquer ajuste fino adicional além da
+instrução em linguagem natural.
+
+### 9.6 Sumarização clínica multimodal (`src/llm/summarizer.py`)
+
+O módulo `summarizer.py` constrói três resumos textuais concisos — um
+por modalidade — a partir dos DataFrames já processados nas Etapas 1, 2
+e 3:
+
+- `build_vitals_summary_text()`: total de amostras, anomalias
+  detectadas, faixa de valores nos pontos anômalos, métricas do
+  detector combinado;
+- `build_posture_summary_text()`: total de frames, anomalias
+  detectadas, padrões posturais identificados (assimetria, colapso de
+  tronco, hiperextensão), métricas do detector;
+- `build_speech_summary_text()` (em `text_analyzer.py`): total de
+  frases, anomalias de velocidade/pausa, termos críticos agregados,
+  distribuição de níveis de urgência.
+
+Esses três resumos — não os dados brutos completos — são enviados ao
+modelo `gpt-oss-120b` (Seção 9.1), mantendo o prompt conciso e reduzindo
+custo/latência sem perda de informação relevante para a síntese clínica.
+
+**Resultado obtido (execução real, sem dados simulados):**
+
+> **Resumo Executivo**
+>
+> 1. **Risco clínico:** Há indícios de risco prioritário. O detector de
+> sinais vitais identificou 9 anomalias (HR 37-152 bpm, SpO₂ 83-99%,
+> pressão sistólica 74-177 mmHg) com recall = 1.0, indicando que todas
+> as ocorrências foram capturadas. Na fala, 1 frase foi classificada
+> como de urgência alta, contendo termos como "dor", "peito" e
+> "fraqueza".
+>
+> 2. **Modalidades com anomalias e possíveis relações:** Sinais vitais
+> — variações extremas de frequência cardíaca e saturação sugerem
+> instabilidade hemodinâmica. Postura — 34/300 frames mostram
+> assimetria bilateral dos braços, inclinação de tronco e possíveis
+> hiperextensões, compatíveis com dor ou fraqueza muscular. Fala —
+> alterações de velocidade/pausas e vocabulário ansioso reforçam a
+> percepção de desconforto físico. A coincidência de dor/fraqueza
+> relatada na fala com anomalias posturais e instabilidade
+> cardiovascular aponta para um quadro agudo possivelmente
+> neuromuscular ou cardiovascular.
+>
+> 3. **Recomendação:** Realizar avaliação médica imediata focada em
+> suporte hemodinâmico (monitoramento contínuo, oxigenação) e exame
+> neurológico/musculoesquelético; considerar ECG, exames de sangue
+> (troponina, eletrólitos) e revisão da terapia fisioterápica.
+> Priorizar intervenção antes de prosseguir com sessões de reabilitação.
+
+**Discussão.** O resultado demonstra o valor agregado da camada de LLM
+em relação aos detectores estatísticos isolados das Etapas 1-3: em vez
+de apenas listar anomalias por modalidade, o modelo **conectou** os
+achados — relacionando a dor/fraqueza relatada na fala com os padrões
+posturais de assimetria e hiperextensão, e com a instabilidade
+hemodinâmica dos sinais vitais — produzindo uma interpretação clínica
+unificada e uma recomendação de próximo passo objetiva. Esse é
+precisamente o tipo de síntese que, no fluxo de trabalho real de uma
+equipe médica, economiza tempo de triagem ao consolidar sinais
+dispersos em múltiplos monitores em um único parecer.
+
+É importante registrar que o modelo foi instruído a basear-se
+exclusivamente nos dados fornecidos (Seção 9.4) — a interpretação
+apresentada é uma síntese das anomalias estatísticas já detectadas
+pelos módulos determinísticos das Etapas 1-3, não um diagnóstico gerado
+de forma independente pelo LLM. Essa distinção é relevante para a
+seção de considerações éticas do relatório final (Etapa 7).
+
+---
+
+## 10. Próximas Etapas
 
 - ~~Etapa 2: Análise de vídeo com MediaPipe Pose~~ ✅ **Concluída**
 - ~~Etapa 3: Transcrição e análise de áudio com Whisper local~~ ✅ **Concluída**
-- Etapa 4: Integração com Groq API para extração de termos críticos,
-  sentimento e sumarização;
+- ~~Etapa 4: Integração com Groq API para extração de termos críticos,
+  sentimento e sumarização~~ ✅ **Concluída**
 - Etapa 5: Motor de fusão multimodal e geração de alertas;
 - Etapa 6: Interface Streamlit;
 - Etapa 7: Consolidação final do relatório técnico;
