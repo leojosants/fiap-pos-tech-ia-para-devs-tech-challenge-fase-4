@@ -3,7 +3,7 @@
 **FIAP | Pós Tech em IA para Devs — Tech Challenge Fase 4**
 **Autor:** Leonardo José de Oliveira Santos (RM369985)
 **Repositório:** github.com/leojosants/fiap-pos-tech-ia-para-devs-tech-challenge-fase-4
-**Aplicação (Streamlit Cloud):** [A PREENCHER NA ETAPA 8 — DEPLOY]
+**Aplicação (Streamlit Cloud):** https://medwatch-fiap-fase4.streamlit.app/
 
 ---
 
@@ -20,10 +20,11 @@
 9. [Etapa 4 — Camada de Integração com Groq API (LLM)](#9-etapa-4--camada-de-integração-com-groq-api-llm)
 10. [Etapa 5 — Motor de Fusão Multimodal e Alertas](#10-etapa-5--motor-de-fusão-multimodal-e-alertas)
 11. [Etapa 6 — Interface Streamlit](#11-etapa-6--interface-streamlit)
-12. [Resultados Consolidados](#12-resultados-consolidados)
-13. [Considerações Éticas](#13-considerações-éticas)
-14. [Limitações Gerais e Trabalhos Futuros](#14-limitações-gerais-e-trabalhos-futuros)
-15. [Como Reproduzir Este Projeto](#15-como-reproduzir-este-projeto)
+12. [Etapa 8 — Deploy no Streamlit Community Cloud](#12-etapa-8--deploy-no-streamlit-community-cloud)
+13. [Resultados Consolidados](#13-resultados-consolidados)
+14. [Considerações Éticas](#14-considerações-éticas)
+15. [Limitações Gerais e Trabalhos Futuros](#15-limitações-gerais-e-trabalhos-futuros)
+16. [Como Reproduzir Este Projeto](#16-como-reproduzir-este-projeto)
 
 ---
 
@@ -47,7 +48,7 @@ linguagem natural, nunca para processar áudio ou vídeo bruto. Essa
 decisão é detalhada e justificada na Seção 2.
 
 **Principais resultados** (dados sintéticos com gabarito conhecido,
-Seção 12): o detector de sinais vitais atingiu recall de 100% (zero
+Seção 13): o detector de sinais vitais atingiu recall de 100% (zero
 anomalias reais perdidas); o detector de postura atingiu precisão de
 100% (zero falsos positivos); o detector de fala atingiu desempenho
 perfeito em ambas as métricas (precisão e recall de 100%); e o motor de
@@ -96,6 +97,18 @@ para gravar a tela com qualidade adequada durante a execução do sistema
 — limitação já comunicada e justificada perante a coordenação do curso
 em desafio de fase anterior.
 
+Tecnicamente, essa limitação decorre da concorrência por recursos entre
+a execução do pipeline (transcrição via Whisper localmente, geração de
+vídeo/áudio sintéticos, chamadas à Groq API, e a própria renderização da
+interface Streamlit) e qualquer software de captura de tela em paralelo
+(ex.: OBS Studio). Mesmo a inferência do Whisper em CPU já é
+computacionalmente intensiva; rodar simultaneamente um gravador de tela
+de alta fidelidade no mesmo hardware satura memória RAM e CPU, causando
+quedas de quadro (stuttering) e instabilidade — produzindo um material
+audiovisual que não representaria fielmente a capacidade real do
+sistema, e que poderia inclusive comprometer a execução do próprio
+pipeline durante a gravação.
+
 Em substituição ao vídeo, esta entrega é composta por dois artefatos
 complementares, deliberadamente elaborados com um nível de detalhe
 acima do habitual exatamente para preencher essa lacuna:
@@ -108,10 +121,10 @@ acima do habitual exatamente para preencher essa lacuna:
    números e evidências visuais. A leitura sequencial das Seções 5 a 11
    reproduz, em texto, a mesma jornada que um vídeo de demonstração
    percorreria oralmente.
-2. **A aplicação Streamlit publicada** (link na capa deste documento,
-   Etapa 8) — permite que a própria banca execute o sistema
-   interativamente, com um único clique, sem depender de nenhuma
-   narração gravada para comprovar que o sistema funciona de fato.
+2. **A aplicação Streamlit publicada** (https://medwatch-fiap-fase4.streamlit.app/) — permite
+   que a própria banca execute o sistema interativamente, com um único
+   clique, sem depender de nenhuma narração gravada para comprovar que
+   o sistema funciona de fato.
 
 Essa combinação — relatório detalhado por escrito + aplicação operável
 diretamente pela banca — foi a estratégia escolhida para que a ausência
@@ -434,7 +447,7 @@ O vídeo é renderizado quadro a quadro com OpenCV (linhas e círculos
 representando o esqueleto), sem qualquer dependência de câmera ou
 display gráfico — escolha de projeto alinhada à ausência de hardware de
 captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
-Cloud, Seção 12 — a confirmar).
+Cloud, Seção 12).
 
 Saídas geradas:
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
@@ -1210,9 +1223,11 @@ dependem de codecs multimídia: o comportamento não é determinístico
 entre sistemas operacionais e instalações do OpenCV, tornando uma
 estratégia de fallback explícita (em vez de assumir um único codec como
 universalmente disponível) uma prática de engenharia mais robusta do
-que uma escolha fixa — especialmente relevante para o ambiente de
-deploy final (Streamlit Cloud, Etapa 8), cujo conjunto de codecs
-disponíveis ainda será validado.
+que uma escolha fixa. Essa previsão se confirmou no deploy final
+(Streamlit Cloud, Seção 12): o servidor não expôs nenhum encoder H.264
+de hardware, exigindo uma terceira estratégia de codificação (via
+ffmpeg em linha de comando, com o encoder de software libx264) além
+das duas inicialmente previstas — detalhada na Seção 12.4.
 
 ### 11.5 Resultado da validação
 
@@ -1234,7 +1249,145 @@ A aplicação foi validada em duas frentes complementares:
 
 ---
 
-## 12. Resultados Consolidados
+## 12. Etapa 8 — Deploy no Streamlit Community Cloud
+
+### 12.1 Plataforma e arquivos de configuração
+
+A plataforma escolhida para o deploy foi o **Streamlit Community Cloud**,
+gratuita e integrada nativamente ao GitHub — escolha já prevista desde o
+início do projeto (Seção 1). Diferente do ambiente de desenvolvimento
+local (gerenciado via `uv`/`pyproject.toml`), o Community Cloud exige
+dois arquivos de configuração específicos na raiz do repositório:
+
+- **`requirements.txt`**: lista de dependências Python, instaladas via
+  `pip`. Mantido manualmente em paralelo ao `pyproject.toml`, replicando
+  as versões já validadas em desenvolvimento.
+- **`packages.txt`**: dependências de sistema operacional (Debian/Linux,
+  instaladas via `apt-get`) — usado para declarar a necessidade do
+  `ffmpeg` no servidor.
+
+O processo de deploy e validação revelou seis problemas reais,
+específicos do ambiente de servidor Linux (ausentes em desenvolvimento
+local no Windows), documentados nas subseções seguintes — cada um
+diagnosticado com evidência de log e corrigido de forma verificável.
+
+### 12.2 Bug: comentários em `packages.txt`
+
+A primeira tentativa de build falhou com `E: Unable to locate package
+<palavra>` repetido para cada palavra de um comentário explicativo
+incluído no arquivo. Diferente do `requirements.txt` (onde `#` inicia um
+comentário válido para o `pip`), o `apt-get` interpreta **cada token de
+cada linha** do `packages.txt` como um nome de pacote a ser instalado —
+incluindo o texto de comentários. Correção: `packages.txt` reduzido à
+única linha necessária, sem nenhum comentário.
+
+### 12.3 Bug: leitura de `GROQ_API_KEY` via `st.secrets`
+
+A chave da Groq API, configurada na seção "Secrets" do painel do
+Streamlit Cloud, não ficou acessível via `os.environ` (mecanismo usado
+em desenvolvimento local através de `python-dotenv` lendo o arquivo
+`.env`). Investigação revelou que o Community Cloud expõe Secrets
+exclusivamente via `st.secrets` — um arquivo `.env` físico nunca é
+criado no servidor. Correção em `groq_client.py`: nova função
+`_get_secret()` que verifica `st.secrets` primeiro, com fallback para
+`os.environ`, preservando o funcionamento local sem alteração.
+
+Um painel de diagnóstico temporário (removido antes da entrega final)
+foi essencial para confirmar essa hipótese com evidência direta do
+ambiente do servidor, em vez de inferência por tentativa e erro.
+
+### 12.4 Bug: codec de vídeo sem suporte a H.264 por hardware
+
+Como anticipado na Seção 11.4, o ambiente do servidor não expôs nenhum
+encoder H.264 de hardware ao `cv2.VideoWriter` (`h264_v4l2m2m: Could not
+find a valid device` — backend FFmpeg do OpenCV limitado a codecs que
+dependem de dispositivo físico de vídeo, ausente em servidores). O
+fallback para `mp4v` evitava a falha de gravação, mas o arquivo
+resultante não era decodificado pelo navegador no contexto do servidor
+(diferente do comportamento observado no Windows local, Seção 11.4).
+
+Correção definitiva: nova função `_write_video_via_ffmpeg_cli()`, que
+invoca o executável `ffmpeg` diretamente via `subprocess`, solicitando
+explicitamente o encoder de **software** `libx264` — disponível no
+`ffmpeg` instalado via `packages.txt`, mas nunca exposto pelo binding
+do OpenCV. O `cv2.VideoWriter` permanece como segundo fallback. Vídeo
+final, validado via `ffprobe`: `codec_name=h264`, `pix_fmt=yuv420p`
+(compatibilidade universal com navegadores).
+
+### 12.5 Bug: permissão de escrita ao preparar o `ffmpeg`
+
+A função que prepara o executável `ffmpeg` (`_ensure_ffmpeg_on_path()`,
+Seção 8.2) tentava copiar o binário para dentro da própria pasta de
+instalação do pacote Python (`site-packages/imageio_ffmpeg/binaries/`).
+Em desenvolvimento local (Windows), isso funcionava por permissões
+amplas do usuário; no servidor (usuário de execução `adminuser`, sem
+permissão de escrita nessa pasta por política de segurança), a operação
+falhava com `PermissionError`. Correção: o binário passou a ser copiado
+para um diretório temporário (`tempfile.gettempdir()`), sempre gravável
+em qualquer ambiente Linux, com permissão de execução explicitamente
+atribuída (`os.chmod 0o755`).
+
+### 12.6 Bug: separador de caminho específico do Windows no JSON de metadados
+
+O arquivo `data/raw/audio_metadata.json` (Seção 8.3), gerado e commitado
+a partir do ambiente Windows de desenvolvimento, armazenava os caminhos
+dos arquivos de áudio usando `str(Path(...))` — que no Windows produz
+barras invertidas (`\\`). No Linux, barra invertida não é separador de
+diretório: é um caractere literal do nome do arquivo. Consequência: a
+verificação `file_path.exists()` retornava `False` no servidor mesmo com
+os doze arquivos `.wav` fisicamente presentes e corretos, levando o
+pipeline a preencher cada segmento com texto vazio e métricas `NaN` —
+sintoma inicialmente confundido com falha de transcrição do Whisper, até
+a inspeção direta do conteúdo do JSON revelar a causa real.
+
+Correção em duas camadas: (1) `synthetic_audio.py` passou a usar
+`Path.as_posix()` em vez de `str()`, garantindo separador "/"
+independente do sistema operacional de geração; (2)
+`audio_processor.py` ganhou uma normalização defensiva de separadores
+antes de criar o objeto `Path`, como rede de segurança para arquivos de
+metadados já commitados com o formato antigo. O `audio_metadata.json`
+foi regenerado e recommitado após a correção.
+
+### 12.7 Troca de branch de deploy: `development` → `main`
+
+Seguindo o plano de versionamento do projeto (branch `main` reservada
+para o estado final), o deploy inicial foi feito a partir de
+`development`. Ao concluir a validação, buscou-se migrar o app para
+`main` — porém a interface do Streamlit Community Cloud não oferece uma
+opção de troca de branch para um app já implantado; a documentação
+oficial da plataforma confirma que a única forma suportada é excluir e
+recriar o app. Como o app é público (sem lista de visualizadores
+convidados a reconfigurar), o único custo adicional foi reconfigurar os
+Secrets no novo app.
+
+Uma primeira tentativa de recriação imediata, com o mesmo subdomínio
+anterior, resultou em erro de acesso persistente mesmo após "Reboot" —
+possivelmente por um conflito de cache no backend da plataforma
+associado à reutilização imediata do mesmo subdomínio recém-liberado.
+A recriação foi bem-sucedida após aguardar alguns minutos e optar por um
+subdomínio diferente, confirmando a hipótese.
+
+### 12.8 Resultado final
+
+Aplicação publicada e validada de ponta a ponta na branch `main`:
+
+**https://medwatch-fiap-fase4.streamlit.app/**
+
+Todas as quatro abas (Alertas, Vitais, Vídeo, Áudio) foram confirmadas
+funcionando no ambiente de produção: vídeo reproduzindo corretamente,
+os doze segmentos de áudio com transcrição e player funcionais, e o
+motor de fusão produzindo o mesmo resultado (nível Crítico, três de três
+modalidades com anomalia) já documentado nas Seções 5, 7, 8 e 10. Este
+episódio de depuração ilustra como soluções tecnicamente corretas em
+ambiente de desenvolvimento podem falhar de formas não triviais ao
+mudar de sistema operacional ou modelo de permissões, e como evidência
+direta do ambiente de execução (logs, painéis de diagnóstico) é
+indispensável para diagnosticar — em vez de apenas adivinhar — a causa
+real de cada falha.
+
+---
+
+## 13. Resultados Consolidados
 
 A tabela abaixo reúne as métricas de avaliação de todos os módulos de
 detecção de anomalias do projeto, permitindo comparação direta entre
@@ -1294,7 +1447,7 @@ ver Seção 1):
 
 ---
 
-## 13. Considerações Éticas
+## 14. Considerações Éticas
 
 O desenvolvimento de sistemas de IA aplicados à saúde exige atenção
 redobrada a riscos que vão além da performance técnica dos modelos.
@@ -1345,20 +1498,20 @@ sintéticos com características estatísticas conhecidas (Seção 3), o
 sistema não foi validado contra a diversidade de apresentações clínicas
 reais (diferentes idades, condições pré-existentes, sotaques na fala,
 tons de pele na análise de vídeo, etc.). Essa é uma limitação
-reconhecida e discutida na Seção 14 — qualquer uso além de fins
+reconhecida e discutida na Seção 15 — qualquer uso além de fins
 acadêmicos/demonstrativos exigiria validação extensiva com dados reais
 e diversos, sob supervisão de profissionais de saúde e comitê de ética
 em pesquisa.
 
 ---
 
-## 14. Limitações Gerais e Trabalhos Futuros
+## 15. Limitações Gerais e Trabalhos Futuros
 
 Esta seção consolida as limitações específicas já discutidas em cada
 etapa (Seções 7.7, 9.2-9.3, 10.5, 11.3-11.4) sob uma perspectiva de
 projeto como um todo.
 
-**Dados exclusivamente sintéticos.** Conforme discutido na Seção 13, a
+**Dados exclusivamente sintéticos.** Conforme discutido na Seção 14, a
 ausência de dados reais é a limitação mais fundamental do projeto. Os
 detectores foram calibrados (limiares de z-score, regras clínicas) para
 o comportamento estatístico específico dos dados sintéticos gerados —
@@ -1397,7 +1550,8 @@ projeto.
 de desenvolvimento testados (Linux sandbox e Windows), exigindo uma
 estratégia de fallback. Embora funcional, essa característica introduz
 uma fonte de variabilidade entre ambientes que merece atenção
-redobrada no momento do deploy final (Streamlit Cloud, Seção 15).
+redobrada no momento do deploy final — episódio detalhado na Seção 12,
+que confirmou a necessidade real dessa estratégia de fallback.
 
 **Escala do dataset de teste.** Os datasets sintéticos (600 amostras de
 vitais, 300 frames de vídeo, 12 frases de áudio) são suficientes para
@@ -1408,14 +1562,14 @@ científica formal.
 
 ---
 
-## 15. Como Reproduzir Este Projeto
+## 16. Como Reproduzir Este Projeto
 
 Esta seção consolida, em um único lugar, os passos para que a banca (ou
 qualquer pessoa) reproduza o projeto localmente — complementando o
 acesso à aplicação publicada no Streamlit Cloud (link na capa deste
 relatório, a preencher na Etapa 8).
 
-### 15.1 Pré-requisitos
+### 16.1 Pré-requisitos
 
 - Python 3.12.9
 - [uv](https://docs.astral.sh/uv/) como gerenciador de pacotes e ambiente
@@ -1424,7 +1578,7 @@ relatório, a preencher na Etapa 8).
   sintético (SAPI5 no Windows, nativo; em Linux, requer `espeak`/`espeak-ng`
   instalado via gerenciador de pacotes do sistema — ver Seção 8.3)
 
-### 15.2 Instalação
+### 16.2 Instalação
 
 ```powershell
 git clone git@github.com:leojosants/fiap-pos-tech-ia-para-devs-tech-challenge-fase-4.git
@@ -1437,7 +1591,7 @@ chave. As variáveis `GROQ_MODEL_FAST` e `GROQ_MODEL_SMART` já vêm
 preenchidas com os modelos vigentes no momento da entrega (ver nota
 sobre depreciação de modelos, Seção 9.2).
 
-### 15.3 Execução via interface Streamlit (recomendado)
+### 16.3 Execução via interface Streamlit (recomendado)
 
 ```powershell
 uv run streamlit run main.py
@@ -1448,7 +1602,7 @@ Abre automaticamente em `http://localhost:8501`. Clique em
 (30-60 segundos, inclui transcrição via Whisper e duas chamadas à Groq
 API). Ver Seção 11 para detalhes da interface.
 
-### 15.4 Execução módulo a módulo (para inspeção/depuração)
+### 16.4 Execução módulo a módulo (para inspeção/depuração)
 
 Cada etapa pode ser executada isoladamente via linha de comando, na
 ordem abaixo (necessária pois etapas posteriores consomem arquivos
