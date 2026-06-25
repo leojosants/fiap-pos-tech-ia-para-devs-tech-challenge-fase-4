@@ -205,7 +205,15 @@ def process_audio_dataset(
     rows: list[dict] = []
 
     for seg in meta["segments"]:
-        file_path = Path(seg["file_path"])
+        # Normaliza separadores de caminho para "/" antes de criar o Path —
+        # rede de segurança contra arquivos audio_metadata.json antigos,
+        # gerados no Windows com str(Path) (que usa "\"), antes da correção
+        # em synthetic_audio.py (.as_posix()). Em Linux, uma barra invertida
+        # não separa diretórios — é um caractere literal do nome do arquivo,
+        # causando falha silenciosa de "arquivo não encontrado" (ver nota
+        # de deploy no relatório técnico, Etapa 8).
+        normalized_path = seg["file_path"].replace("\\", "/")
+        file_path = Path(normalized_path)
 
         row = {
             "segment_id": seg["segment_id"],
