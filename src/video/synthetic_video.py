@@ -18,6 +18,7 @@ Saída:
     data/raw/synthetic_pose_frames.npy — array de frames (backup sem cv2)
 """
 
+import os
 import numpy as np
 import cv2
 from pathlib import Path
@@ -203,15 +204,64 @@ def _render_frame(
     return frame
 
 
-# Codecs candidatos, em ordem de preferência, para escrita de vídeo
-# compatível com reprodução direta em navegador (via st.video do Streamlit).
-# "avc1" é a tag FFmpeg para H.264 — codec universalmente suportado por
-# navegadores modernos. "mp4v" (MPEG-4 Part 2) grava com sucesso na maioria
-# dos builds do OpenCV, mas NÃO é reproduzido nativamente por navegadores
-# como Chrome/Edge/Firefox — o arquivo abre, mas a tela permanece preta,
-# sintoma observado e corrigido durante o desenvolvimento deste projeto
-# (ver relatório técnico).
+# Codecs candidatos, em ordem de preferência, para escrita de vídeo via
+# OpenCV — mantidos como segunda tentativa (ver _write_video_via_ffmpeg_cli
+# para a estratégia primária, mais robusta entre ambientes).
 _VIDEO_CODEC_CANDIDATES = ["avc1", "mp4v"]
+
+
+def _write_video_via_ffmpeg_cli(frames: list[np.ndarray], output_path: Path) -> bool:
+    """
+    Grava o vídeo invocando o executável ffmpeg diretamente (linha de
+    comando), com o encoder de software libx264 — abordagem mais robusta
+    entre ambientes do que cv2.VideoWriter.
+
+    Motivação: o backend FFmpeg do OpenCV, em alguns ambientes de deploy
+    (observado no Streamlit Community Cloud), só expõe codecs de hardware
+    (ex.: h264_v4l2m2m, que requer dispositivo de vídeo físico ausente em
+    servidores) mesmo quando o ffmpeg do sistema tem libx264 (encoder de
+    software, sem dependência de hardware) disponível e funcional. Ao
+    chamar o ffmpeg diretamente — em vez de através do cv2.VideoWriter —
+    temos controle explícito sobre qual encoder é solicitado, evitando
+    essa limitação de exposição de codecs do binding do OpenCV.
+
+    Os frames são primeiro escritos como PNGs numerados em um diretório
+    temporário, depois codificados em uma única chamada ffmpeg.
+
+    Retorna True se a codificação teve sucesso, False caso o ffmpeg não
+    esteja disponível ou a codificação falhe (nesse caso, o chamador deve
+    recorrer ao fallback via OpenCV).
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    from src.audio.audio_processor import _ensure_ffmpeg_on_path
+    _ensure_ffmpeg_on_path()
+
+    if shutil.which("ffmpeg") is None:
+        return False
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for idx, frame in enumerate(frames):
+            cv2.imwrite(os.path.join(tmp_dir, f"frame_{idx:05d}.png"), frame)
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(FPS),
+            "-i", os.path.join(tmp_dir, "frame_%05d.png"),
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",   # compatibilidade máxima com navegadores
+            "-movflags", "+faststart",  # permite reprodução progressiva (streaming)
+            str(output_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+        if result.returncode != 0:
+            print(f"[AVISO] Falha ao codificar vídeo via ffmpeg CLI: {result.stderr[-500:]}")
+            return False
+
+        return output_path.exists() and output_path.stat().st_size > 0
 
 
 def _write_video_with_browser_compatible_codec(
@@ -219,15 +269,21 @@ def _write_video_with_browser_compatible_codec(
     output_path: Path,
 ) -> str:
     """
-    Tenta gravar o vídeo com o primeiro codec da lista de candidatos que
-    o OpenCV conseguir abrir com sucesso neste ambiente, priorizando
-    H.264 (avc1) por compatibilidade com navegadores.
+    Grava o vídeo priorizando o ffmpeg via linha de comando (libx264 —
+    Seção de deploy do relatório técnico), com fallback para cv2.VideoWriter
+    (codecs avc1/mp4v) caso o ffmpeg não esteja disponível neste ambiente.
 
-    Retorna o nome do codec efetivamente utilizado, para fins de log e
-    diagnóstico — útil porque a disponibilidade de codecs varia entre
-    sistemas operacionais e instalações do OpenCV (Windows, Linux, macOS
-    têm builds com codecs distintos vinculados via FFmpeg).
+    Retorna uma string identificando o método/codec efetivamente utilizado,
+    para fins de log e diagnóstico.
     """
+    if _write_video_via_ffmpeg_cli(frames, output_path):
+        return "libx264 (ffmpeg CLI)"
+
+    print(
+        "[AVISO] Codificação via ffmpeg CLI (libx264) não disponível ou "
+        "falhou neste ambiente. Recorrendo ao cv2.VideoWriter (OpenCV)."
+    )
+
     for codec_name in _VIDEO_CODEC_CANDIDATES:
         fourcc = cv2.VideoWriter_fourcc(*codec_name)
         writer = cv2.VideoWriter(str(output_path), fourcc, FPS, (WIDTH, HEIGHT))
@@ -249,8 +305,9 @@ def _write_video_with_browser_compatible_codec(
         return codec_name
 
     raise RuntimeError(
-        "Nenhum codec de vídeo disponível neste ambiente OpenCV "
-        f"(tentados: {_VIDEO_CODEC_CANDIDATES}). Verifique a instalação "
+        "Nenhum método de codificação de vídeo disponível neste ambiente "
+        f"(ffmpeg CLI falhou; cv2.VideoWriter tentados: "
+        f"{_VIDEO_CODEC_CANDIDATES}). Verifique a instalação do ffmpeg e "
         "do opencv-python."
     )
 
