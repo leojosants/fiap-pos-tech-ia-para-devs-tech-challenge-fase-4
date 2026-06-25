@@ -143,78 +143,6 @@ def run_monitoring_pipeline(generate_clinical_summary: bool = True) -> None:
     st.session_state["pipeline_executed"] = True
 
 
-def render_debug_secrets() -> None:
-    """
-    BLOCO TEMPORÁRIO DE DIAGNÓSTICO — remover após resolver o problema
-    de GROQ_API_KEY não encontrada no deploy do Streamlit Community Cloud.
-    Não expõe a chave real, apenas tamanho e primeiros caracteres.
-    """
-    with st.expander("🔍 Diagnóstico temporário de Secrets (remover depois)"):
-        st.write("**1. st.secrets — chaves disponíveis:**")
-        try:
-            keys = list(st.secrets.keys())
-            st.write(f"Chaves: {keys}")
-            if "GROQ_API_KEY" in st.secrets:
-                val = st.secrets["GROQ_API_KEY"]
-                st.success(f"GROQ_API_KEY em st.secrets! Tamanho={len(val)}, início={val[:6]}...")
-            else:
-                st.error("GROQ_API_KEY NÃO está em st.secrets.")
-        except Exception as e:
-            st.error(f"Erro ao acessar st.secrets: {type(e).__name__}: {e}")
-
-        st.write("**2. os.environ — variável GROQ_API_KEY:**")
-        env_val = os.environ.get("GROQ_API_KEY")
-        if env_val:
-            st.success(f"GROQ_API_KEY em os.environ! Tamanho={len(env_val)}, início={env_val[:6]}...")
-        else:
-            st.error("GROQ_API_KEY NÃO está em os.environ.")
-
-        st.write("**3. Variáveis de ambiente contendo 'GROQ':**")
-        groq_vars = {k: v for k, v in os.environ.items() if "GROQ" in k.upper()}
-        if groq_vars:
-            for k, v in groq_vars.items():
-                st.write(f"- {k}: tamanho={len(v)}, início={v[:6]}...")
-        else:
-            st.warning("Nenhuma variável de ambiente contendo 'GROQ' encontrada.")
-
-        st.write("**4. Arquivo .streamlit/secrets.toml:**")
-        secrets_path = ".streamlit/secrets.toml"
-        st.write(f"Caminho absoluto: {os.path.abspath(secrets_path)}")
-        st.write(f"Existe: {os.path.exists(secrets_path)}")
-
-        st.write("**5. Arquivos de áudio (data/raw/audio_segments/):**")
-        audio_dir = Path("data/raw/audio_segments")
-        if audio_dir.exists():
-            wav_files = sorted(audio_dir.glob("*.wav"))
-            st.write(f"Diretório existe. {len(wav_files)} arquivo(s) .wav encontrados.")
-            for wf in wav_files[:3]:
-                size = wf.stat().st_size
-                st.write(f"- {wf.name}: {size} bytes")
-        else:
-            st.error(f"Diretório {audio_dir.absolute()} NÃO existe.")
-
-        st.write("**6. Teste manual do Whisper em um arquivo:**")
-        try:
-            import whisper
-            if audio_dir.exists():
-                wav_files = sorted(audio_dir.glob("*.wav"))
-                if wav_files:
-                    test_file = wav_files[0]
-                    st.write(f"Testando transcrição de: {test_file.name}")
-                    from src.audio.audio_processor import _ensure_ffmpeg_on_path
-                    _ensure_ffmpeg_on_path()
-                    model = whisper.load_model("base")
-                    result = model.transcribe(str(test_file), language="pt", fp16=False)
-                    st.write(f"Texto transcrito: '{result.get('text', '')}'")
-                    st.write(f"Segments: {len(result.get('segments', []))}")
-                else:
-                    st.warning("Nenhum arquivo .wav para testar.")
-        except Exception as e:
-            import traceback
-            st.error(f"Erro no teste do Whisper: {type(e).__name__}: {e}")
-            st.code(traceback.format_exc())
-
-
 def render_overview() -> None:
     """Renderiza a tela inicial com visão geral do sistema."""
     st.title("🏥 MedWatch — Monitoramento Multimodal de Pacientes")
@@ -246,7 +174,6 @@ def render_overview() -> None:
 
 
 def main() -> None:
-    render_debug_secrets()
     render_overview()
 
     if st.button("▶️ Executar Monitoramento Completo", type="primary", use_container_width=False):
