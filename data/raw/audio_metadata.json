@@ -6,7 +6,7 @@
       "text": "Estou me sentindo bem hoje",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_00.wav",
+      "file_path": "data/raw/audio_segments/frase_00.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     },
@@ -15,7 +15,7 @@
       "text": "Minha pressão está controlada",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_01.wav",
+      "file_path": "data/raw/audio_segments/frase_01.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     },
@@ -24,7 +24,7 @@
       "text": "Não sinto nenhuma dor",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_02.wav",
+      "file_path": "data/raw/audio_segments/frase_02.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     },
@@ -33,7 +33,7 @@
       "text": "Dormi bem essa noite",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_03.wav",
+      "file_path": "data/raw/audio_segments/frase_03.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     },
@@ -42,7 +42,7 @@
       "text": "Estou sentindo dor no peito",
       "anomaly_type": "fala_lenta",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_04.wav",
+      "file_path": "data/raw/audio_segments/frase_04.wav",
       "tts_rate": 90,
       "tts_pause_ms": 350
     },
@@ -51,7 +51,7 @@
       "text": "Minha visão está embaçada",
       "anomaly_type": "fala_lenta",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_05.wav",
+      "file_path": "data/raw/audio_segments/frase_05.wav",
       "tts_rate": 90,
       "tts_pause_ms": 350
     },
@@ -60,7 +60,7 @@
       "text": "Sinto uma fraqueza no braço",
       "anomaly_type": "fala_lenta",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_06.wav",
+      "file_path": "data/raw/audio_segments/frase_06.wav",
       "tts_rate": 90,
       "tts_pause_ms": 350
     },
@@ -69,7 +69,7 @@
       "text": "Já tomei a medicação prescrita",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_07.wav",
+      "file_path": "data/raw/audio_segments/frase_07.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     },
@@ -78,7 +78,7 @@
       "text": "Estou muito ansioso e agitado",
       "anomaly_type": "fala_rapida",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_08.wav",
+      "file_path": "data/raw/audio_segments/frase_08.wav",
       "tts_rate": 320,
       "tts_pause_ms": 0
     },
@@ -87,7 +87,7 @@
       "text": "Não consigo parar de tremer",
       "anomaly_type": "fala_rapida",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_09.wav",
+      "file_path": "data/raw/audio_segments/frase_09.wav",
       "tts_rate": 320,
       "tts_pause_ms": 0
     },
@@ -96,7 +96,7 @@
       "text": "Preciso de ajuda agora mesmo",
       "anomaly_type": "fala_rapida",
       "is_injected_anomaly": 1,
-      "file_path": "data\\raw\\audio_segments\\frase_10.wav",
+      "file_path": "data/raw/audio_segments/frase_10.wav",
       "tts_rate": 320,
       "tts_pause_ms": 0
     },
@@ -105,7 +105,7 @@
       "text": "Estou calmo e tranquilo agora",
       "anomaly_type": "normal",
       "is_injected_anomaly": 0,
-      "file_path": "data\\raw\\audio_segments\\frase_11.wav",
+      "file_path": "data/raw/audio_segments/frase_11.wav",
       "tts_rate": 180,
       "tts_pause_ms": 0
     }

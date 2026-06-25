@@ -215,7 +215,17 @@ def generate_synthetic_audio_dataset(
             text=phrase["text"],
             anomaly_type=anomaly_type,
             is_injected_anomaly=0 if anomaly_type == "normal" else 1,
-            file_path=str(file_path),
+            # .as_posix() força separador "/" independente do sistema
+            # operacional onde este script é executado — essencial porque
+            # o caminho é persistido em JSON e lido depois em um ambiente
+            # possivelmente diferente (ex.: gerado no Windows localmente,
+            # consumido no Linux do Streamlit Community Cloud). Usar
+            # str(file_path) aqui geraria "\\" no Windows, que o Path()
+            # do Linux interpreta como caractere literal do nome do
+            # arquivo, não como separador de diretório — causando
+            # falha silenciosa de "arquivo não encontrado" no deploy
+            # (ver nota de deploy no relatório técnico, Etapa 8).
+            file_path=file_path.as_posix(),
             tts_rate=profile["rate"],
             tts_pause_ms=profile["pause_ms"],
         ))
