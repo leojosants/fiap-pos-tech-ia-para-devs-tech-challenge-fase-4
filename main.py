@@ -182,6 +182,38 @@ def render_debug_secrets() -> None:
         st.write(f"Caminho absoluto: {os.path.abspath(secrets_path)}")
         st.write(f"Existe: {os.path.exists(secrets_path)}")
 
+        st.write("**5. Arquivos de áudio (data/raw/audio_segments/):**")
+        audio_dir = Path("data/raw/audio_segments")
+        if audio_dir.exists():
+            wav_files = sorted(audio_dir.glob("*.wav"))
+            st.write(f"Diretório existe. {len(wav_files)} arquivo(s) .wav encontrados.")
+            for wf in wav_files[:3]:
+                size = wf.stat().st_size
+                st.write(f"- {wf.name}: {size} bytes")
+        else:
+            st.error(f"Diretório {audio_dir.absolute()} NÃO existe.")
+
+        st.write("**6. Teste manual do Whisper em um arquivo:**")
+        try:
+            import whisper
+            if audio_dir.exists():
+                wav_files = sorted(audio_dir.glob("*.wav"))
+                if wav_files:
+                    test_file = wav_files[0]
+                    st.write(f"Testando transcrição de: {test_file.name}")
+                    from src.audio.audio_processor import _ensure_ffmpeg_on_path
+                    _ensure_ffmpeg_on_path()
+                    model = whisper.load_model("base")
+                    result = model.transcribe(str(test_file), language="pt", fp16=False)
+                    st.write(f"Texto transcrito: '{result.get('text', '')}'")
+                    st.write(f"Segments: {len(result.get('segments', []))}")
+                else:
+                    st.warning("Nenhum arquivo .wav para testar.")
+        except Exception as e:
+            import traceback
+            st.error(f"Erro no teste do Whisper: {type(e).__name__}: {e}")
+            st.code(traceback.format_exc())
+
 
 def render_overview() -> None:
     """Renderiza a tela inicial com visão geral do sistema."""
