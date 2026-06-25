@@ -54,22 +54,41 @@ def _ensure_ffmpeg_on_path() -> None:
     try:
         import imageio_ffmpeg
         ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
-        ffmpeg_dir = os.path.dirname(ffmpeg_path)
-
-        if ffmpeg_dir not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+        original_dir = os.path.dirname(ffmpeg_path)
 
         # O Whisper chama especificamente o comando "ffmpeg" — em alguns
         # ambientes o executável do imageio-ffmpeg tem nome diferente
-        # (ex.: ffmpeg-win64-v4.2.2.exe). Criamos uma cópia com nome compatível.
+        # (ex.: ffmpeg-win64-v4.2.2.exe), exigindo uma cópia com nome
+        # compatível. Essa cópia é feita em um diretório temporário
+        # gravável (tempfile.gettempdir()), e NÃO dentro da pasta de
+        # instalação do pacote (site-packages/imageio_ffmpeg/binaries/),
+        # pois em ambientes de deploy com permissões restritas (ex.:
+        # Streamlit Community Cloud, usuário "adminuser" sem permissão
+        # de escrita em site-packages) a cópia no local original falha
+        # com PermissionError — comportamento observado e corrigido
+        # durante o deploy deste projeto (ver relatório técnico, nota
+        # sobre a Etapa 8).
+        import tempfile
+        import shutil
+
         target_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
-        target_path = os.path.join(ffmpeg_dir, target_name)
+        target_dir = os.path.join(tempfile.gettempdir(), "medwatch_ffmpeg")
+        target_path = os.path.join(target_dir, target_name)
+
         if not os.path.exists(target_path):
-            import shutil
+            os.makedirs(target_dir, exist_ok=True)
             shutil.copy(ffmpeg_path, target_path)
+            os.chmod(target_path, 0o755)  # garante permissão de execução
+
+        # Coloca o diretório temporário (com o binário já nomeado
+        # corretamente) na FRENTE do PATH, para garantir que o comando
+        # "ffmpeg" resolva para ele antes de qualquer outra ocorrência.
+        if target_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = target_dir + os.pathsep + os.environ.get("PATH", "")
     except ImportError:
         # imageio-ffmpeg não instalado — assume que ffmpeg já está no PATH
-        # do sistema (ex.: instalado manualmente ou via Chocolatey/Scoop)
+        # do sistema (ex.: instalado manualmente, via Chocolatey/Scoop, ou
+        # via packages.txt no Streamlit Community Cloud)
         pass
 
 
