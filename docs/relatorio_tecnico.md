@@ -3,7 +3,7 @@
 **FIAP | Pós Tech em IA para Devs — Tech Challenge Fase 4**
 **Autor:** Leonardo José de Oliveira Santos (RM369985)
 **Repositório:** github.com/leojosants/fiap-pos-tech-ia-para-devs-tech-challenge-fase-4
-**Aplicação (Streamlit Cloud):** https://medwatch-fiap-fase4.streamlit.app/
+**Aplicação (Streamlit Cloud):** <https://medwatch-fiap-fase4.streamlit.app/>
 
 ---
 
@@ -121,7 +121,7 @@ acima do habitual exatamente para preencher essa lacuna:
    números e evidências visuais. A leitura sequencial das Seções 5 a 11
    reproduz, em texto, a mesma jornada que um vídeo de demonstração
    percorreria oralmente.
-2. **A aplicação Streamlit publicada** (https://medwatch-fiap-fase4.streamlit.app/) — permite
+2. **A aplicação Streamlit publicada** (<https://medwatch-fiap-fase4.streamlit.app/>) — permite
    que a própria banca execute o sistema interativamente, com um único
    clique, sem depender de nenhuma narração gravada para comprovar que
    o sistema funciona de fato.
@@ -450,6 +450,7 @@ captura e à necessidade de rodar em ambiente de deploy headless (Streamlit
 Cloud, Seção 12).
 
 Saídas geradas:
+
 - `data/processed/synthetic_pose.mp4` — vídeo renderizado completo;
 - `data/raw/synthetic_pose_frames.npy` — array NumPy dos frames brutos,
   usado como *backup* para reprocessamento sem decodificar o `.mp4`.
@@ -501,8 +502,9 @@ quando o ângulo absoluto não excede um limiar fixo.
 
 **3. Regras clínicas.** Duas regras de limiar fixo, calibradas
 empiricamente para o dataset sintético:
-   - Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
-   - Colapso de tronco: z-score do deslocamento horizontal conjunto dos
+
+- Assimetria direta: `|ângulo_esquerdo − ângulo_direito| > 25°`;
+- Colapso de tronco: z-score do deslocamento horizontal conjunto dos
      dois ombros `> 2.0` (captura quando ambos os ombros migram para o
      mesmo lado, característico de inclinação de tronco).
 
@@ -701,10 +703,11 @@ como anômalo qualquer valor com `|z| > 1.5` — sensível tanto a fala
 anormalmente lenta quanto anormalmente rápida.
 
 **2. Regras clínicas.** Duas regras complementares:
-   - Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
+
+- Fala lentificada: `silence_ratio > 0.40` **e** `words_per_second <
      1.0` — a combinação de ambos os critérios distingue hesitação
      patológica de uma pausa natural entre frases;
-   - Fala acelerada: `words_per_second` acima de um limiar adaptativo
+- Fala acelerada: `words_per_second` acima de um limiar adaptativo
      (média + 1 desvio padrão do conjunto).
 
 **Resultados obtidos (execução real, sem dados simulados):**
@@ -857,12 +860,13 @@ strings espalhadas pelo código.
 
 **Prompt de análise de texto.** Solicita ao modelo `gpt-oss-20b` que
 responda exclusivamente em JSON estrito, extraindo:
-   - `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
-   - `sentimento`: positivo, neutro ou negativo;
-   - `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
+
+- `termos_criticos`: sintomas, partes do corpo ou condições mencionadas;
+- `sentimento`: positivo, neutro ou negativo;
+- `nivel_urgencia`: baixo, médio ou alto — com critério explícito no
      prompt distinguindo sintomas potencialmente graves (dor no peito,
      falta de ar, fraqueza súbita) de queixas moderadas ou neutras;
-   - `justificativa`: explicação breve, útil para auditoria humana da
+- `justificativa`: explicação breve, útil para auditoria humana da
      decisão do modelo.
 
 Como modelos de linguagem ocasionalmente envolvem o JSON em texto
@@ -1371,7 +1375,7 @@ subdomínio diferente, confirmando a hipótese.
 
 Aplicação publicada e validada de ponta a ponta na branch `main`:
 
-**https://medwatch-fiap-fase4.streamlit.app/**
+**<https://medwatch-fiap-fase4.streamlit.app/>**
 
 Todas as quatro abas (Alertas, Vitais, Vídeo, Áudio) foram confirmadas
 funcionando no ambiente de produção: vídeo reproduzindo corretamente,
@@ -1638,3 +1642,22 @@ uv run python -m src.alerts.run_pipeline
 Os artefatos visuais (gráficos, vídeo sintético, dashboard) são salvos
 em `data/processed/`; uma cópia das imagens citadas neste relatório está
 versionada em `docs/imagens/`.
+
+### 16.5 Testes automatizados
+
+O projeto inclui uma suíte de testes com `pytest` (pasta `tests/`),
+cobrindo a lógica determinística principal de cada módulo das Etapas 1
+a 5 — geração e detecção de anomalias em sinais vitais, geometria de
+ângulos articulares, normalização de caminhos de arquivo de áudio
+(regressão do bug real documentado na Seção 12.6), parsing tolerante de
+respostas do LLM, e a regra de decisão do motor de fusão. Todas as
+chamadas a serviços externos (Whisper, Groq API) são substituídas por
+mocks, de forma que a suíte completa executa em poucos segundos, sem
+custo de API nem dependência de conectividade:
+
+```powershell
+uv add --dev pytest
+uv run pytest
+```
+
+Resultado esperado: 18 testes aprovados em menos de 20 segundos.
